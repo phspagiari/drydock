@@ -28,9 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # The documented floor, so README's "Python 3.10+" is a tested claim
+      # rather than an assertion. Newer versions are covered by developers
+      # running the suite locally.
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.10'
       - name: unittest
         run: python3 -m unittest discover board/tests --verbose
 
