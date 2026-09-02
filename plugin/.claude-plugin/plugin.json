@@ -1,5 +1,5 @@
 {
   "name": "drydock",
-  "description": "Spec-driven agentic execution pipeline: spec sessions, git-backed queue, orchestrator loop, adversarial pre-PR review, live board",
+  "description": "Spec-driven agentic execution — spec sessions, git-backed queue, orchestrator loop, adversarial pre-PR review, live board",
   "version": "1.0.0"
 }

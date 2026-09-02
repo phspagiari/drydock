@@ -81,5 +81,5 @@ list.
   specify *what* and *how verified*, not every line of *how*.
 - Padding criteria with a build command alone. Build and tests are the floor;
   at least one criterion must encode the feature's actual intent.
-- Splitting one coherent piece of work into many specs to look pipeline-y.
-  One spec = one reviewable deliverable.
+- Splitting one coherent piece of work into many specs to make the queue
+  look busy. One spec = one reviewable deliverable.
