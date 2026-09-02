@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>drydock board</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 15h16l-2 5H6z"/>
+      <rect x="8" y="4" width="8" height="9" rx="1.5"/>
+      <path class="wave" d="M2 21c2 0 2-1.4 4-1.4s2 1.4 4 1.4 2-1.4 4-1.4 2 1.4 4 1.4 2-1.4 4-1.4"/>
+    </svg>
+    <h1>drydock</h1>
+    <span class="repo" id="repo"></span>
+  </div>
+  <div class="status" id="status">
+    <span class="dot" aria-hidden="true"></span>
+    <span id="stamp">connecting…</span>
+  </div>
+</header>
+
+<div class="banner" id="banner" hidden>
+  Server unreachable — is <code>board/server.py serve</code> still running?
+</div>
+
+<main id="sections">
+  <p class="loading">reading the queue…</p>
+</main>
+
+<footer class="foot">
+  polling every 4s · state read fresh from disk on every request
+</footer>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+  <div class="drawer-head">
+    <h2 id="drawer-title"></h2>
+    <button class="icon-btn" data-close="1" aria-label="Close">&times;</button>
+  </div>
+  <div class="tabs" id="drawer-tabs"></div>
+  <pre class="file" id="drawer-file"></pre>
+</aside>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
