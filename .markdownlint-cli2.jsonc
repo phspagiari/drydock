@@ -1,0 +1,29 @@
+{
+  // The contracts are prose that agents read, not documentation pages. Rules
+  // that would force rewriting them are off; everything else stays on.
+  "config": {
+    "default": true,
+
+    // Line length. The contracts are hand-wrapped at 76 columns and the README
+    // hero carries long badge URLs that cannot be broken.
+    "MD013": false,
+
+    // Inline HTML. The README hero is centred, which Markdown cannot do.
+    "MD033": false,
+
+    // Ordered-list prefix. contracts/DISPATCH.md numbers its steps 1..17
+    // continuously across headings, and ORCHESTRATOR.md and REVIEWER.md cite
+    // those numbers ("per DISPATCH step 12", "steps 16-17"). Restarting the
+    // numbering at each heading to satisfy the linter would break every
+    // cross-reference in the contract set.
+    "MD029": false,
+
+    // Table pipe alignment. The spec template and the model-routing table are
+    // aligned for reading in a plain editor, which is where specs get written;
+    // MD060 wants a single canonical spacing style across the repo and would
+    // reflow every table in the contracts to get it.
+    "MD060": false
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["node_modules/**", "docs/.research-conventions.md"]
+}

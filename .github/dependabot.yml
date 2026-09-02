@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Actions only. board/ is standard library by design, so there is no
+  # package ecosystem to track.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci

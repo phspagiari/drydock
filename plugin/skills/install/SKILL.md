@@ -52,7 +52,7 @@ for what good entries look like.
 
 Symlink the plugin dir into the skills directory:
 
-```
+```sh
 ln -s <DRYDOCK_HOME>/plugin ~/.claude/skills/drydock
 ```
 
