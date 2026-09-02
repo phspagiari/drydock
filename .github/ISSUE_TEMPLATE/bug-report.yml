@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in drydock behaved differently than the contracts say it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions, ideas and "is this supposed to work like this?" belong in
+        [Discussions](https://github.com/phspagiari/drydock/discussions). This
+        form is for behaviour that contradicts `contracts/`.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What you ran
+      description: The command or skill invocation, and what you expected it to do.
+      placeholder: /drydock:dispatch 2026-09-01-add-retry-header — expected a worktree and a background executor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+
+  - type: dropdown
+    id: state
+    attributes:
+      label: Where the item was in the queue
+      options:
+        - inbox
+        - active
+        - blocked
+        - deliverables
+        - archive
+        - not queue-related (board, install, contracts)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Orchestrator or executor log
+      description: >
+        The relevant part of the tick report, `RUN.md`, or the board's error —
+        whichever applies. Redact repository names and paths you would rather
+        not publish. This is rendered as a code block, no backticks needed.
+      render: text
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "`claude --version`, `python3 --version`, and the drydock commit or tag."
+      placeholder: claude 2.1.0 · Python 3.12.4 · drydock v0.1.0
+    validations:
+      required: true

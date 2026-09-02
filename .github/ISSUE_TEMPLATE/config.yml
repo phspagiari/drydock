@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question, idea, or a contract you disagree with
+    url: https://github.com/phspagiari/drydock/discussions
+    about: >
+      Anything that is not a reproducible bug. Contract disagreements are the
+      most useful thing you can bring — start here rather than in an issue.
