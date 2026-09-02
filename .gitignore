@@ -1,0 +1,4 @@
+*.html
+!board/static/*.html
+.orchestrator-heartbeat
+__pycache__/
