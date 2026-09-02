@@ -22,7 +22,12 @@
     // aligned for reading in a plain editor, which is where specs get written;
     // MD060 wants a single canonical spacing style across the repo and would
     // reflow every table in the contracts to get it.
-    "MD060": false
+    "MD060": false,
+
+    // First line must be an h1. The README hero is a centred <div>, which is
+    // what every comparable project does, and the issue/PR templates are form
+    // fragments rather than documents.
+    "MD041": false
   },
   "globs": ["**/*.md"],
   "ignores": ["node_modules/**", "docs/.research-conventions.md"]
