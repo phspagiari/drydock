@@ -13,14 +13,28 @@ project, not a funded security programme.
 Two parts of drydock are worth understanding before you run it, and neither is
 a vulnerability — they are what the tool does.
 
-**The board serves file contents from the repo it is pointed at.** `board/server.py`
-binds `127.0.0.1` only, and exposes a fixed allowlist of item files
-(`SPEC.md`, `QUESTION.md`, `DELIVERABLE.md`, `RUN.md`, `REJECTION.md`,
-`REPORT.md`, `REVIEW.md`, `READY.md`) plus the static frontend. There is no
-authentication, because there is no network exposure to authenticate. Putting
-it behind a tunnel, a reverse proxy, or a `0.0.0.0` bind turns a local
-dashboard into an unauthenticated file server for your queue — including
-whatever your specs and run logs happen to quote.
+**The board serves file contents from the STATE_HOME it is pointed at.**
+`plugin/board/server.py` binds `127.0.0.1` only, and exposes a fixed
+allowlist of item files (`SPEC.md`, `QUESTION.md`, `DELIVERABLE.md`,
+`RUN.md`, `REJECTION.md`, `REPORT.md`, `REVIEW.md`, `READY.md`) plus the
+static frontend. There is no authentication, because there is no network
+exposure to authenticate. Putting it behind a tunnel, a reverse proxy, or a
+`0.0.0.0` bind turns a local dashboard into an unauthenticated file server
+for your queue — including whatever your specs and run logs happen to quote.
+
+**STATE_HOME (`~/.drydock` by default) is never given a git remote.**
+`/drydock:install` refuses to proceed if one is already configured there,
+and every skill and contract that touches STATE_HOME treats a remote
+appearing later as a hard stop. This is deliberate: STATE_HOME is where your
+specs — which can quote internal systems, credentials-adjacent context, or
+anything else your teammates shouldn't read — accumulate as git history.
+Before this was a separate, remote-less directory, `/drydock:install` cloned
+the drydock tool itself and the same clone doubled as the queue; a `git push`
+from that clone, whether by habit or by the orchestrator's own housekeeping,
+could have sent that history to whatever remote the clone happened to have —
+including this project's own, if you'd also cloned it to contribute a fix.
+Get durability without a remote via `git bundle create <path> --all` to
+storage your own backup policy already covers.
 
 **The orchestrator dispatches agents that write to your repositories,
 unattended.** Executors run as background Claude Code sessions with
@@ -35,16 +49,17 @@ runs stall on prompts. A stalled run is recoverable; an unreviewed mutation
 against live infrastructure is not.
 
 What follows from that: a specification is an instruction to an agent with
-your credentials. Treat `specs/inbox/` the way you would treat a shell script
-someone handed you — reviewing a spec before it is dispatched is the control,
-and it is why `/drydock:spec` writes specs rather than executing them.
+your credentials. Treat `STATE_HOME/specs/inbox/` the way you would treat a
+shell script someone handed you — reviewing a spec before it is dispatched is
+the control, and it is why `/drydock:spec` writes specs rather than executing
+them.
 
 ## In scope
 
-Path traversal or allowlist escapes in `board/server.py`; anything that lets
-the board serve a file outside the item directory it was asked for; a contract
-path that would cause an executor to act outside a spec's declared blast
-radius.
+Path traversal or allowlist escapes in `plugin/board/server.py`; anything
+that lets the board serve a file outside the item directory it was asked
+for; a contract path that would cause an executor to act outside a spec's
+declared blast radius.
 
 ## Not in scope
 

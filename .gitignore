@@ -1,4 +1,3 @@
 *.html
-!board/static/*.html
-.orchestrator-heartbeat
+!plugin/board/static/*.html
 __pycache__/

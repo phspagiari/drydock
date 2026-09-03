@@ -10,6 +10,34 @@ A git repository is the state machine, Markdown files are the rules, and every
 moving part is a separate Claude Code process that reads those rules fresh and
 communicates only through files on disk.
 
+## STATE_HOME vs PLUGIN_HOME
+
+Two directories, two git repositories, and the distinction is load-bearing
+rather than cosmetic:
+
+- **PLUGIN_HOME** is wherever Claude Code installed the drydock plugin —
+  `plugin/skills/`, `plugin/contracts/`, `plugin/board/`,
+  `plugin/templates/`. Read-only from a running loop's perspective; it
+  changes only via `/plugin update`.
+- **STATE_HOME** is `~/.drydock` by default (override with
+  `$DRYDOCK_STATE_HOME`) — `specs/`, `deliverables/`, `archive/`,
+  `PRIORS.md`, `PROPOSALS.md`, `config`, `.orchestrator-heartbeat`. A plain
+  local git repository, created by `/drydock:install`, and **never given a
+  remote** — every contract and skill treats a configured remote there as a
+  hard stop, not a warning.
+
+The split exists because those two things have opposite trust boundaries.
+PLUGIN_HOME is shared, versioned, and meant to be the same across everyone
+running drydock — including anyone who also clones this repo to fix a bug in
+`board/`. STATE_HOME is exactly the opposite: private, per-person, and never
+meant to leave the machine it runs on. Collapsing them into one git working
+tree (the pre-0.2 model, where `/drydock:install` cloned the tool and the
+clone doubled as the queue) meant a spec quoting internal systems and this
+project's own commit history lived in the same repository — one careless
+`git push` away from the wrong remote. See `SECURITY.md` and
+[FAQ](FAQ.md#can-i-run-this-against-a-repo-my-team-owns) for the full
+reasoning.
+
 ## The actors
 
 Five roles. None of them is a service, and none of them holds state in memory
@@ -18,11 +46,11 @@ tells the next one everything it needs.
 
 | Actor | Lives in | Reads | Writes | Lifetime |
 |---|---|---|---|---|
-| **Spec session** | Your normal work session | The conversation you were already having | `specs/inbox/<id>/SPEC.md` | The length of the discussion |
-| **Orchestrator** | A pinned pane, longest-running model | [`ORCHESTRATOR.md`](../contracts/ORCHESTRATOR.md) + [`DISPATCH.md`](../contracts/DISPATCH.md), every tick | Queue moves, commits, notifications | Hours to days |
-| **Executor** | A background session in a git worktree | `SPEC.md`, [`PRIORS.md`](../contracts/PRIORS.md), DISPATCH steps 9–11 | Code on a branch, `RUN.md`, then `READY.md` **or** `QUESTION.md` | One spec, one attempt |
-| **Reviewer** | A background session on the worktree | [`REVIEWER.md`](../contracts/REVIEWER.md), the diff, the target repo's conventions | `REVIEW.md` — nothing else, ever | One review round |
-| **Review pass** | You, once a day | `deliverables/`, `specs/blocked/` | Verdicts: approve, reject fast, reject slow | Minutes |
+| **Spec session** | Your normal work session | The conversation you were already having | `<STATE_HOME>/specs/inbox/<id>/SPEC.md` | The length of the discussion |
+| **Orchestrator** | A pinned pane, longest-running model | [`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md) + [`DISPATCH.md`](../plugin/contracts/DISPATCH.md) (in PLUGIN_HOME), every tick | Queue moves, commits, notifications (in STATE_HOME) | Hours to days |
+| **Executor** | A background session in a git worktree | `SPEC.md`, `<STATE_HOME>/PRIORS.md`, DISPATCH steps 9–11 | Code on a branch, `RUN.md`, then `READY.md` **or** `QUESTION.md` | One spec, one attempt |
+| **Reviewer** | A background session on the worktree | [`REVIEWER.md`](../plugin/contracts/REVIEWER.md), the diff, the target repo's conventions | `REVIEW.md` — nothing else, ever | One review round |
+| **Review pass** | You, once a day | `<STATE_HOME>/deliverables/`, `<STATE_HOME>/specs/blocked/` | Verdicts: approve, reject fast, reject slow | Minutes |
 
 The orchestrator is deliberately the thinnest of these. It never writes code
 and never judges a deliverable — it moves state, dispatches, and verifies. Both
@@ -76,7 +104,7 @@ and no human. It is where most of drydock's value is produced.
 
 ## The zero-calls gate
 
-The rule is in [`DISPATCH.md`](../contracts/DISPATCH.md) step 10: **delivering
+The rule is in [`DISPATCH.md`](../plugin/contracts/DISPATCH.md) step 10: **delivering
 with caveats is forbidden.** An executor may finish, or it may escalate. There
 is no third option where it ships something with a note attached.
 
@@ -178,8 +206,12 @@ What this buys:
   amending `REVIEWER.md` changes the next review — including for a loop that
   is already running. The contracts say this explicitly: the latest version
   always wins, and no actor may work from a remembered copy.
-- **Backup that already exists.** Push the drydock repo and your queue's full
-  history is backed up by the same mechanism as your code.
+- **Backup without a remote.** STATE_HOME is deliberately never given a
+  remote (see [STATE_HOME vs PLUGIN_HOME](#state_home-vs-plugin_home)), so
+  the usual "push it" backup does not apply here on purpose. `git bundle
+  create <path> --all` snapshots the full history — commits, not just the
+  working tree — into one file you can copy wherever your own backup policy
+  already covers, without ever registering something pushable.
 
 What it costs: transitions are not atomic in the database sense, ordering must
 be derived deterministically rather than assumed (hence lexicographic-by-id
@@ -201,8 +233,8 @@ commits mentions a spec id or a drydock path; `DISPATCH.md` step 11 makes that
 an explicit executor obligation, and the reviewer checks for leaked
 terminology as part of every hunt.
 
-The bookkeeping cost lands on drydock instead: the drydock repo is the sole
-registry of which PRs are ours, and PR state is read back per **recorded URL**
+The bookkeeping cost lands on STATE_HOME instead: it is the sole registry of
+which PRs are ours, and PR state is read back per **recorded URL**
 (`gh pr view <url>`), never by scanning the target repo's PR list. Scanning
 would pick up your teammates' work.
 
@@ -229,8 +261,8 @@ alone, and sorts what it finds into exactly one of three tiers:
 
 | Tier | Lands in | Applied by |
 |---|---|---|
-| **Prior** — an advisory fact about a repo, build system or reviewer | [`PRIORS.md`](../contracts/PRIORS.md) | The retro, directly. Priors are knowledge, not policy |
-| **Rule** — a process failure no prior can fix | [`PROPOSALS.md`](../contracts/PROPOSALS.md), with evidence, cost, risk and a suggested diff | **A human only**, in the review pass or a full sweep |
+| **Prior** — an advisory fact about a repo, build system or reviewer | `PRIORS.md` in STATE_HOME (seeded from [`PRIORS.seed.md`](../plugin/contracts/PRIORS.seed.md)) | The retro, directly. Priors are knowledge, not policy |
+| **Rule** — a process failure no prior can fix | `PROPOSALS.md` in STATE_HOME (seeded from [`PROPOSALS.seed.md`](../plugin/contracts/PROPOSALS.seed.md)), with evidence, cost, risk and a suggested diff | **A human only**, in the review pass or a full sweep |
 | **Skill defect** — a plugin skill produced the failure | The skill itself | Whatever skill-improvement pass you use |
 
 The separation is the safeguard. An autonomous pass may append knowledge, but a
@@ -241,6 +273,6 @@ stated cost is recorded as a preference, not a proposal.
 `PRIORS.md` ships empty, and should stay empty until your own runs fill it. A
 prior inherited from someone else's codebase is misinformation to your
 executors — it will be cited confidently and be wrong. See
-[`examples/example-priors.md`](../examples/example-priors.md) for the shape of
+[`examples/example-priors.md`](../plugin/examples/example-priors.md) for the shape of
 one worth keeping: a named mechanism, the command that proves or disproves it
 today, and the item that taught it.

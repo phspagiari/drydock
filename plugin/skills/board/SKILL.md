@@ -5,11 +5,12 @@ description: Start and open the live drydock board (localhost:8642). Use when as
 
 # /drydock:board — dashboard control
 
-> **DRYDOCK_HOME**: resolve once per invocation as `realpath <this skill's
-> base dir>/../..` (the repo root containing `plugin/`). Every path below is
-> relative to it.
+> **PLUGIN_HOME**: resolve once per invocation as `realpath <this skill's
+> base dir>/../..` (the plugin package root — `board/` lives there).
+> **STATE_HOME**: `~/.drydock`, or `$DRYDOCK_STATE_HOME` if set — the queue
+> the board reads.
 
-The board is `<DRYDOCK_HOME>/board/server.py serve` on
+The board is `<PLUGIN_HOME>/board/server.py serve --root <STATE_HOME>` on
 `http://localhost:8642` — localhost-only, reads the queue from disk per
 request, nothing to regenerate and nothing published. Normally the
 orchestrator keeps it alive; this skill is for direct control from any
@@ -19,9 +20,9 @@ session.
 
 1. `curl -sf localhost:8642/healthz` — if it answers `ok`, skip to 3.
 2. Down → start it as a background Bash task:
-   `<DRYDOCK_HOME>/board/server.py serve`. Re-check healthz (retry ~2s); if
-   still down, read the task output and report the error instead of opening a
-   dead page.
+   `<PLUGIN_HOME>/board/server.py serve --root <STATE_HOME>`. Re-check
+   healthz (retry ~2s); if still down, read the task output and report the
+   error instead of opening a dead page.
 3. `open http://localhost:8642` and report one line: board state + queue
    counts from `curl -s localhost:8642/api/state` (blocked / ready / active /
    inbox).
