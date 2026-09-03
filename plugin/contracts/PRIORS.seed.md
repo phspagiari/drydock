@@ -1,5 +1,10 @@
 # PRIORS — distilled lessons from past runs
 
+> This is the **seed** copied to `<STATE_HOME>/PRIORS.md` once, by
+> `/drydock:install`. It is part of the plugin package and gets overwritten
+> on `/plugin update` — the live file your executors read and your retros
+> append to lives in `<STATE_HOME>` (`~/.drydock` by default), never here.
+
 Read by every executor (before work) and every reviewer (while grounding).
 Appended by `/drydock:retro`, which mines QUESTION.md resolutions, REVIEW
 findings, and REJECTION routings since the last retro. Every entry cites the

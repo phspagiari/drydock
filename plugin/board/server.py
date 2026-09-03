@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""drydock board — live queue dashboard for a drydock repo.
+"""drydock board — live queue dashboard for a drydock STATE_HOME.
 
-    board/server.py serve [--port 8642] [--root <repo>]
+    board/server.py serve [--port 8642] [--root <state-home>]
 
 Serves a static frontend from ``board/static/`` plus a small JSON API. Queue
 state is read from disk on every request: no cache, no background daemon, no
 regeneration step — what you see is what is on disk right now.
 
-Standard library only, on purpose: a drydock checkout is usable the moment it
-is cloned, with no install step and no dependency surface.
+Standard library only, on purpose: no install step and no dependency surface.
 
 The socket binds 127.0.0.1 only. This is a local tool and serves file contents
-from the repo it is pointed at; do not expose it.
+from the STATE_HOME it is pointed at; do not expose it.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime
@@ -323,8 +323,13 @@ def make_server(root: Path, port: int = DEFAULT_PORT,
 # --------------------------------------------------------------------------
 
 def default_root() -> Path:
-    """The repo that contains this ``board/`` directory."""
-    return Path(__file__).resolve().parent.parent
+    """The drydock STATE_HOME: ``$DRYDOCK_STATE_HOME``, else ``~/.drydock``.
+
+    Deliberately NOT wherever this script lives — that is the plugin
+    package (read-only, updated via ``/plugin update``), never the queue.
+    """
+    env = os.environ.get("DRYDOCK_STATE_HOME")
+    return Path(env) if env else Path.home() / ".drydock"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -335,7 +340,8 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--port", type=int, default=DEFAULT_PORT,
                        help=f"port to bind (default {DEFAULT_PORT})")
     serve.add_argument("--root", type=Path, default=None,
-                       help="drydock repo to read (default: the repo containing board/)")
+                       help="drydock STATE_HOME to read "
+                            "(default: $DRYDOCK_STATE_HOME or ~/.drydock)")
     args = parser.parse_args(argv)
 
     root = (args.root or default_root()).resolve()

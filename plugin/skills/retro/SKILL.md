@@ -5,9 +5,14 @@ description: Self-improvement pass over drydock's own history — mine unblock d
 
 # /drydock:retro — the system learns from its own discussions
 
-> **DRYDOCK_HOME**: resolve once per invocation as `realpath <this skill's
-> base dir>/../..` (the repo root containing `plugin/`). Every path below is
-> relative to it.
+> **PLUGIN_HOME**: resolve once per invocation as `realpath <this skill's
+> base dir>/../..` (the plugin package root). **STATE_HOME**: `~/.drydock`,
+> or `$DRYDOCK_STATE_HOME` if set — where `PRIORS.md`, `PROPOSALS.md` and the
+> queue actually live and get committed (locally; `<STATE_HOME>` has no
+> remote). Contract amendments below still target files under
+> `<PLUGIN_HOME>/contracts/` and `<PLUGIN_HOME>/templates/` — those are the
+> plugin's own source and changing them is a normal edit to that clone/repo,
+> outside the STATE_HOME/no-remote rule.
 
 ## Two modes
 
@@ -15,17 +20,17 @@ description: Self-improvement pass over drydock's own history — mine unblock d
   orchestrator after every ship): corpus = that item's directory and git
   history only (QUESTION.md resolutions, REVIEW-r*.md rounds, RUN.md, spec
   amendments). Priors append and commit as usual; **rule proposals go to
-  `contracts/PROPOSALS.md`** (proposal, motivating evidence, suggested diff)
-  — NEVER applied autonomously. Does not move the retro-cursor. No findings →
-  exit silently; do not force a lesson out of a clean run.
+  `<STATE_HOME>/PROPOSALS.md`** (proposal, motivating evidence, suggested
+  diff) — NEVER applied autonomously. Does not move the retro-cursor. No
+  findings → exit silently; do not force a lesson out of a clean run.
 - **Full sweep, interactive** (bare `/drydock:retro`, run with the human):
-  everything since the retro-cursor, as below — and also walk PROPOSALS.md
-  together: approved proposals become contract amendments, declined ones are
-  recorded and removed.
+  everything since the retro-cursor, as below — and also walk
+  `<STATE_HOME>/PROPOSALS.md` together: approved proposals become contract
+  amendments, declined ones are recorded and removed.
 
 ## Mine
 
-1. Read the `retro-cursor` commit from `contracts/PRIORS.md`. Everything
+1. Read the `retro-cursor` commit from `<STATE_HOME>/PRIORS.md`. Everything
    between it and HEAD is this retro's corpus:
    - `QUESTION.md` files + the SPEC.md amendments that answered them (what
      did specs chronically under-specify? what was decided?)
@@ -40,14 +45,14 @@ description: Self-improvement pass over drydock's own history — mine unblock d
 ## Distill — each lesson lands in exactly one tier
 
 - **Prior** (advisory, repo- or domain-specific fact): append to
-  `contracts/PRIORS.md` with the citing item id. Commit directly — priors are
-  knowledge, not policy.
+  `<STATE_HOME>/PRIORS.md` with the citing item id. Commit directly (in
+  `<STATE_HOME>`, never pushed) — priors are knowledge, not policy.
 - **Rule** (process failure a prior can't fix): draft the amendment to
-  `contracts/DISPATCH.md` / `REVIEWER.md` / `ORCHESTRATOR.md` /
-  `templates/spec-template.md`, show the diff and the incident that motivates
-  it, and apply **only on the human's approval** — contract changes are
-  theirs, always. In per-item mode, the proposal goes to PROPOSALS.md and
-  stops there.
+  `<PLUGIN_HOME>/contracts/DISPATCH.md` / `REVIEWER.md` / `ORCHESTRATOR.md` /
+  `<PLUGIN_HOME>/templates/spec-template.md`, show the diff and the incident
+  that motivates it, and apply **only on the human's approval** — contract
+  changes are theirs, always. In per-item mode, the proposal goes to
+  `<STATE_HOME>/PROPOSALS.md` and stops there.
 - **Skill defect** (a plugin skill produced the failure): fold the correction
   into that skill, with the evidence, using whatever skill-improvement pass
   your setup has.
@@ -57,8 +62,8 @@ shows to be wrong or obsolete (note why in the commit).
 
 ## Close
 
-1. Update the `retro-cursor` line in `contracts/PRIORS.md` to HEAD; commit
-   `retro: <n> priors, <m> rule proposals`.
+1. Update the `retro-cursor` line in `<STATE_HOME>/PRIORS.md` to HEAD; commit
+   `retro: <n> priors, <m> rule proposals` (in `<STATE_HOME>`, never pushed).
 2. Report: what was learned, what was proposed and approved/declined, and the
    one metric that matters — are human interventions per item trending down?
 

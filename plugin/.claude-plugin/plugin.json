@@ -1,5 +1,11 @@
 {
   "name": "drydock",
-  "description": "Spec-driven agentic execution \u2014 spec sessions, git-backed queue, orchestrator loop, adversarial pre-PR review, live board",
-  "version": "0.1.0"
+  "description": "Spec-driven agentic execution — spec sessions, git-backed queue, orchestrator loop, adversarial pre-PR review, live board",
+  "version": "0.2.0",
+  "author": {
+    "name": "phspagiari"
+  },
+  "homepage": "https://github.com/phspagiari/drydock",
+  "repository": "https://github.com/phspagiari/drydock",
+  "license": "MIT"
 }

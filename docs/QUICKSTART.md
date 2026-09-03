@@ -1,7 +1,7 @@
 # Quickstart
 
-From a clone to a merged pull request, with the three-session layout that makes
-the whole thing work.
+From a plugin install to a merged pull request, with the three-session layout
+that makes the whole thing work.
 
 ## Prerequisites
 
@@ -17,40 +17,41 @@ nothing ships, because `ship` *is* `gh pr create --draft`.
 
 ## Install
 
-```sh
-git clone https://github.com/phspagiari/drydock.git
-cd drydock
-claude --plugin-dir ./plugin
+```text
+/plugin marketplace add phspagiari/drydock
+/plugin install drydock@drydock
 ```
 
-`--plugin-dir` loads the drydock skills for that session only — enough to
-bootstrap. Then:
+That installs the plugin itself — skills, contracts, board — the same way you'd install any other
+Claude Code plugin. It is read-only from here on; `/plugin update drydock` is how it changes. Then:
 
 ```text
 /drydock:install
 ```
 
-It asks before it writes anything, and reports every write. Six steps:
+This is a different, smaller job: it never touches the plugin's code, only your own **STATE_HOME**
+(`~/.drydock` by default) — a private, local-only git repository, never given a remote, that holds
+your queue, deliverables, archive, and priors. It asks before it writes anything, and reports every
+write. Seven steps:
 
-1. **Where drydock lives.** The clone *is* the system — queue, contracts,
-   board, plugin. Default is where you just cloned it.
-2. **Your branch namespace**, usually your git forge handle. Every branch
-   drydock creates in a target repo is `<namespace>/drydock-<id>`, which is
-   what keeps agent work identifiable and separable from your own branches.
-   The literal `<namespace>` is replaced across the contracts and committed.
-3. **A fresh queue**, if the clone carries someone else's items. It offers;
-   it never resets without asking. It also offers to blank
-   `contracts/PRIORS.md` — take that one, since a prior about someone else's
-   build system is misinformation to your executors.
-4. **Registering the plugin permanently** — a symlink from your skills
-   directory to `plugin/`, so `/drydock:*` survives the session. Restart or
-   `/reload-plugins` afterwards.
-5. **Verification**, fail-closed: Python, the board booting and answering
-   `/healthz`, the drydock repo's git state (it warns if there is no remote —
-   the queue's history is your audit log and backing it up is yours to
-   arrange), `gh auth status`, and whether your Claude Code install supports
-   `--bg`.
+1. **Where STATE_HOME lives.** Default `~/.drydock`. Not a clone of anything — a private data
+   directory, like `~/.aws` or `~/.docker`. If it already has a git remote configured, install
+   refuses to proceed until you remove it or point elsewhere: a remote is the one thing that could
+   ever let a spec leak somewhere it shouldn't.
+2. **Personalize**: your **branch namespace**, usually your git forge handle — every branch
+   drydock creates in a target repo is `<namespace>/drydock-<id>` — and your permission posture
+   (step 6). Both get written to `STATE_HOME/config`, never sed-replaced into the plugin's own
+   files, so a later `/plugin update` can never quietly reset them.
+3. **Seed the queue**: empty `specs/{inbox,active,blocked}`, `deliverables/`, `archive/`, plus
+   `PRIORS.md` and `PROPOSALS.md` copied once from the plugin's seed templates.
+4. **Migrate**, if you used drydock before this refactor: your real queue lived inside a cloned
+   repo registered via a manual skills symlink. Install detects that layout, offers to copy your
+   real items into the new STATE_HOME, and retires the old symlink.
+5. **Verification**, fail-closed: Python, the board booting and answering `/healthz` against
+   STATE_HOME, STATE_HOME's git state (clean, and still no remote), `gh auth status`, and whether
+   your Claude Code install supports `--bg`.
 6. **Permission posture** — the question that matters. See below.
+7. **Hand-over** — the three commands you'll actually run day to day.
 
 ### The permission question
 
@@ -65,9 +66,10 @@ permission policy is the boundary**, which means install asks whether you
 actually have one.
 
 If you don't, say so, and run executors with `--permission-mode acceptEdits`
-instead (edit the dispatch line in `contracts/ORCHESTRATOR.md`). Some runs will
-stall on prompts. Take that trade: a stalled run is recoverable; an unreviewed
-mutation against live infrastructure is not.
+instead — set `permission_mode: acceptEdits` in `STATE_HOME/config`, no
+contract file to edit. Some runs will stall on prompts. Take that trade: a
+stalled run is recoverable; an unreviewed mutation against live
+infrastructure is not.
 
 ## The three-session topology
 
@@ -142,7 +144,7 @@ Two more things the skill will hold you to:
   context is hot — that is much cheaper than answering it as an escalation
   tomorrow.
 
-Read [`examples/example-spec.md`](../examples/example-spec.md) for every section
+Read [`examples/example-spec.md`](../plugin/examples/example-spec.md) for every section
 filled the way it should be.
 
 ## Run it

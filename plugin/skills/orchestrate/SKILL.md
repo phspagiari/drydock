@@ -5,40 +5,44 @@ description: Start or tick the drydock orchestrator loop. Use when asked "/drydo
 
 # /drydock:orchestrate — the loop
 
-> **DRYDOCK_HOME**: resolve once per invocation as `realpath <this skill's
-> base dir>/../..` (the repo root containing `plugin/`). Every path below is
-> relative to it.
+> **PLUGIN_HOME**: resolve once per invocation as `realpath <this skill's
+> base dir>/../..` (the plugin package root — `contracts/`, `board/` are its
+> siblings, read-only, updated only via `/plugin update`). **STATE_HOME**:
+> `~/.drydock`, or `$DRYDOCK_STATE_HOME` if set — the queue, deliverables,
+> archive, priors, proposals, config and the heartbeat file. It is a plain
+> local git repository with **no remote, ever**.
 
-The orchestrator contract is `contracts/ORCHESTRATOR.md`. **Re-read it on
-every invocation** — this is what keeps the running loop current when the
-contract changes; never work from a remembered copy.
+The orchestrator contract is `<PLUGIN_HOME>/contracts/ORCHESTRATOR.md`.
+**Re-read it on every invocation** — this is what keeps the running loop
+current when the contract changes; never work from a remembered copy.
 
 ## Bare invocation (bootstrap)
 
-1. **Duplicate guard**: read `.orchestrator-heartbeat`. If its mtime is under
-   45 minutes old, another orchestrator is probably alive — report its age
-   and STOP; the human decides whether to proceed anyway.
+1. **Duplicate guard**: read `<STATE_HOME>/.orchestrator-heartbeat`. If its
+   mtime is under 45 minutes old, another orchestrator is probably alive —
+   report its age and STOP; the human decides whether to proceed anyway.
 2. **Model check**: this loop wants your longest-running, highest-context
    model — it re-reads contracts, tracks many items, and lives for hours. If
    the current session is on something smaller, say so in one line, then
    continue; availability beats purity.
-3. **Open the board**: ensure it's serving (healthz → start if needed) and
+3. **Open the board**: ensure it's serving (`<PLUGIN_HOME>/board/server.py
+   serve --root <STATE_HOME>`, healthz → start if needed) and
    `open http://localhost:8642` — starting drydock means having the board on
    screen. Bootstrap only; ticks never re-open it.
 4. Run one tick (below).
 5. Continue self-paced: re-invoke yourself as `/drydock:orchestrate tick` on
    a loop with no fixed interval (the `loop` skill, a scheduler, or whatever
-   your setup provides). Pacing per `contracts/ORCHESTRATOR.md` — 20–30 min
-   idle, ~10 min with active executions, never subminute.
+   your setup provides). Pacing per `<PLUGIN_HOME>/contracts/ORCHESTRATOR.md`
+   — 20–30 min idle, ~10 min with active executions, never subminute.
 
 ## `tick` argument (one tick, called by the loop)
 
-Re-read `contracts/ORCHESTRATOR.md` and execute exactly one pass of "Each
-tick": inbox dispatch → active verification → housekeeping (board healthz,
-repo push, touch `.orchestrator-heartbeat`) → notify per policy. Nothing to
-do → report noop so the loop collapses it. Remember that a tick is noop only
-*after* housekeeping ran — the PR sweeps and session reconciliation are never
-skippable.
+Re-read `<PLUGIN_HOME>/contracts/ORCHESTRATOR.md` and execute exactly one
+pass of "Each tick": inbox dispatch → active verification → housekeeping
+(board healthz, touch `<STATE_HOME>/.orchestrator-heartbeat`) → notify per
+policy. Nothing to do → report noop so the loop collapses it. Remember that a
+tick is noop only *after* housekeeping ran — the PR sweeps and session
+reconciliation are never skippable.
 
 ## Rules
 
@@ -49,4 +53,4 @@ skippable.
   background CLI sessions (`claude --bg`) — in-process subagents bloat this
   session, die with it, and are invisible to the session list.
 - Stopping: the human stops the loop (or asks this session to); on stop,
-  remove `.orchestrator-heartbeat`.
+  remove `<STATE_HOME>/.orchestrator-heartbeat`.
