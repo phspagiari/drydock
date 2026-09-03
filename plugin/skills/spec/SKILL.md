@@ -5,13 +5,15 @@ description: Converge the current interactive session into a drydock spec instea
 
 # /drydock:spec — session exit through the queue
 
-> **DRYDOCK_HOME**: resolve once per invocation as `realpath <this skill's
-> base dir>/../..` (the repo root containing `plugin/`). Every path below is
-> relative to it.
+> **PLUGIN_HOME**: resolve once per invocation as `realpath <this skill's
+> base dir>/../..` (the plugin package root — `templates/` lives there).
+> **STATE_HOME**: `~/.drydock`, or `$DRYDOCK_STATE_HOME` if set — where the
+> spec actually gets written and committed (locally; `<STATE_HOME>` has no
+> remote, so this commit is never pushed).
 
 The session's deliverable is a **spec**, not the work itself. This skill ends
-the discussion phase by writing `specs/inbox/<id>/SPEC.md` from
-`templates/spec-template.md`.
+the discussion phase by writing `<STATE_HOME>/specs/inbox/<id>/SPEC.md` from
+`<PLUGIN_HOME>/templates/spec-template.md`.
 
 ## Hard rules
 
@@ -41,7 +43,8 @@ the discussion phase by writing `specs/inbox/<id>/SPEC.md` from
    `depends_on` — if this work builds on another spec's outcome, list that
    id; the orchestrator won't dispatch it until the dependency has shipped.
    Ask when ordering seems to matter and nobody has said.
-4. Write `specs/inbox/<id>/SPEC.md`. Commit the drydock repo: `spec: <id>`.
+4. Write `<STATE_HOME>/specs/inbox/<id>/SPEC.md`. Commit in `<STATE_HOME>`
+   (never pushed — it has no remote): `spec: <id>`.
 5. Report: spec id, dispatch state (dispatchable, or blocked on N
    clarifications), and the next action — the orchestrator picks it up on its
    next tick, or `/drydock:dispatch <id>` runs it now.
@@ -51,7 +54,7 @@ the discussion phase by writing `specs/inbox/<id>/SPEC.md` from
 Escalations are answered here — never in the orchestrator session (keep the
 loop thin) and never by resurrecting the executor.
 
-1. Read `specs/blocked/<id>/QUESTION.md` and its `SPEC.md`. Present the
+1. Read `<STATE_HOME>/specs/blocked/<id>/QUESTION.md` and its `SPEC.md`. Present the
    decision: the question, the options, what was ruled out. If QUESTION.md is
    not self-contained enough to decide from, flag it — that is an
    executor-quality defect for the slow loop, in addition to answering.
@@ -67,9 +70,10 @@ loop thin) and never by resurrecting the executor.
    sentences, and the options considered and rejected (with why). This is
    what `/drydock:retro` mines; a resolution that only lives in the spec diff
    loses the reasoning.
-5. Move `specs/blocked/<id>/` → `specs/inbox/<id>/` (QUESTION.md stays in the
-   directory as history), commit `unblock: <id>`. The orchestrator
-   re-dispatches on its next tick — do not dispatch from here.
+5. Move `<STATE_HOME>/specs/blocked/<id>/` → `<STATE_HOME>/specs/inbox/<id>/`
+   (QUESTION.md stays in the directory as history), commit `unblock: <id>`
+   (in `<STATE_HOME>`, never pushed). The orchestrator re-dispatches on its
+   next tick — do not dispatch from here.
 
 If your setup names sessions, name this one `unblock-<id>` — sessions
 launched from a board card are otherwise indistinguishable in the session

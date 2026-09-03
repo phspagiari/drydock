@@ -112,28 +112,32 @@ in a description you would have skimmed.
 worktree support, and [`gh`](https://cli.github.com) authenticated (drydock opens draft PRs and
 reads their state through it).
 
-```sh
-git clone https://github.com/phspagiari/drydock.git
-cd drydock
-claude --plugin-dir ./plugin      # loads /drydock:* for this session only
-```
-
-Then, in that session:
-
 ```text
+/plugin marketplace add phspagiari/drydock
+/plugin install drydock@drydock
 /drydock:install
 ```
 
-Install asks before it writes anything: where drydock should live, your **branch namespace**
-(usually your git forge handle — it prefixes every branch drydock creates, as
-`<namespace>/drydock-<id>`), whether to reset the queue, and what your permission posture is. It
-symlinks the plugin into your skills directory so `/drydock:*` survives the session, then verifies
-the toolchain and fails loudly on anything missing. See [docs/QUICKSTART.md](docs/QUICKSTART.md)
-for the walkthrough and your first spec.
+The first two lines install the plugin itself — code, contracts, board — the same way you'd
+install any other Claude Code plugin; `/plugin update drydock` keeps it current later. `/drydock:install`
+then sets up your **STATE_HOME** (`~/.drydock` by default): a private, local-only git repository —
+never given a remote, ever — that holds your queue, deliverables, archive, and priors. It asks
+before it writes anything: where STATE_HOME should live, your **branch namespace** (usually your
+git forge handle — it prefixes every branch drydock creates, as `<namespace>/drydock-<id>`), and
+what your permission posture is. Then it verifies the toolchain and fails loudly on anything
+missing. See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the walkthrough and your first spec.
+
+> [!NOTE]
+> Your queue and the plugin's code are deliberately two different things in two different places.
+> STATE_HOME is yours, local, and remote-less by construction — nothing you write into a spec can
+> end up pushed anywhere, including back into this project if you ever also clone it to contribute
+> a fix. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#state_home-vs-plugin_home).
+
+<!-- -->
 
 > [!WARNING]
 > The orchestrator dispatches agents that **write to your repositories unattended**, and the board
-> serves file contents from the repo it is pointed at over `127.0.0.1`. Executors run as background
+> serves file contents from the STATE_HOME it is pointed at over `127.0.0.1`. Executors run as background
 > sessions with `--permission-mode bypassPermissions` — which does not widen what drydock may do,
 > because every executor is a separate Claude Code process that loads *your* `settings.json`, hooks
 > and deny rules. **Your permission policy is the boundary.** If you do not have a deny layer you
@@ -145,8 +149,10 @@ for the walkthrough and your first spec.
 ### The queue
 
 A spec's directory is its state. Nothing else records it — no database, no daemon, no sidecar file.
+All of it lives under **STATE_HOME** (`~/.drydock` by default) — a private, local-only git repo
+created by `/drydock:install`, never this repository, and never given a remote.
 
-| Directory | API key | What it means | What moves it out |
+| Directory (under STATE_HOME) | API key | What it means | What moves it out |
 |---|---|---|---|
 | `specs/inbox/<id>/` | `inbox` | Written and dispatchable — or waiting on a `depends_on` id that has not shipped | Preflight passes → `active`; an unresolved `[NEEDS CLARIFICATION]` → `blocked` |
 | `specs/active/<id>/` | `active` | An executor is running in a worktree. Review and fix rounds happen here | Reviewer's `ship` → `deliverables/`; `flag` → `blocked` |
@@ -166,11 +172,11 @@ tick of a loop that is already running.
 
 | Contract | Governs | Read by | When |
 |---|---|---|---|
-| [`ORCHESTRATOR.md`](contracts/ORCHESTRATOR.md) | The tick: inbox dispatch, active verification, housekeeping, notification policy | The orchestrator session | Every tick |
-| [`DISPATCH.md`](contracts/DISPATCH.md) | One spec from inbox to landed deliverable — preflight, worktree, the zero-calls gate, ship, comment rounds. Steps 1–17 | Orchestrator, `/drydock:dispatch`, and executors (steps 9–11) | Any tick that dispatches or lands work |
-| [`REVIEWER.md`](contracts/REVIEWER.md) | The adversarial pass: what to hunt for, the `ship`/`fix`/`flag` verdict, the round cap | The reviewer session | When an executor writes `READY.md` |
-| [`PRIORS.md`](contracts/PRIORS.md) | Accumulated lessons — advisory knowledge, not policy. Ships empty on purpose | Every executor before work, every reviewer while grounding | Start of every run |
-| [`PROPOSALS.md`](contracts/PROPOSALS.md) | Rule changes a retro wants, with evidence and a suggested diff. Applied only by a human | `/drydock:retro`, `/drydock:review` | A per-item retro queues; the review pass decides |
+| [`ORCHESTRATOR.md`](plugin/contracts/ORCHESTRATOR.md) | The tick: inbox dispatch, active verification, housekeeping, notification policy | The orchestrator session | Every tick |
+| [`DISPATCH.md`](plugin/contracts/DISPATCH.md) | One spec from inbox to landed deliverable — preflight, worktree, the zero-calls gate, ship, comment rounds. Steps 1–17 | Orchestrator, `/drydock:dispatch`, and executors (steps 9–11) | Any tick that dispatches or lands work |
+| [`REVIEWER.md`](plugin/contracts/REVIEWER.md) | The adversarial pass: what to hunt for, the `ship`/`fix`/`flag` verdict, the round cap | The reviewer session | When an executor writes `READY.md` |
+| `PRIORS.md` (in STATE_HOME) | Accumulated lessons — advisory knowledge, not policy. Seeded empty from [`PRIORS.seed.md`](plugin/contracts/PRIORS.seed.md) at install | Every executor before work, every reviewer while grounding | Start of every run |
+| `PROPOSALS.md` (in STATE_HOME) | Rule changes a retro wants, with evidence and a suggested diff. Applied only by a human | `/drydock:retro`, `/drydock:review` | A per-item retro queues; the review pass decides |
 
 ### The commands
 
@@ -200,7 +206,7 @@ it prevents is expensive.
   amended spec, the branch, and `RUN.md` — never the old session. Which is why an escalating
   executor must push its work and leave `RUN.md` a handoff a stranger could resume from.
 - **The target repo carries zero drydock metadata.** No spec files, labels or tags committed
-  there; the branch and the PR are the entire footprint. The drydock repo is the sole registry of
+  there; the branch and the PR are the entire footprint. STATE_HOME is the sole registry of
   which PRs are yours, and PR state is read back per recorded URL — never by scanning the target
   repo's PR list.
 - **Executors never speak on the PR.** A comment needing an answer becomes a *drafted* reply you
@@ -217,7 +223,7 @@ Full lifecycle, the actor model, and the state diagram: [docs/ARCHITECTURE.md](d
 ## The board
 
 ```sh
-python3 board/server.py serve --port 8642
+python3 plugin/board/server.py serve --port 8642   # --root defaults to ~/.drydock
 ```
 
 Standard library only, no install step, no build. It reads the queue from disk on every request —
@@ -229,10 +235,10 @@ cards carry the paste-ready `claude "…"` command that works them.
 
 ## Writing a spec
 
-Start from [`templates/spec-template.md`](templates/spec-template.md); read
-[`examples/example-spec.md`](examples/example-spec.md) for every section filled the way it should
-be. The sections are Context, Goal, Non-goals, Constraints & blast radius, Requirements, Acceptance
-criteria, Escalation conditions, and Assumptions.
+Start from [`templates/spec-template.md`](plugin/templates/spec-template.md); read
+[`examples/example-spec.md`](plugin/examples/example-spec.md) for every section filled the way it
+should be. The sections are Context, Goal, Non-goals, Constraints & blast radius, Requirements,
+Acceptance criteria, Escalation conditions, and Assumptions.
 
 **Acceptance criteria are the gate, and the section newcomers under-fill.** Each one is a command
 plus the result that counts as a pass. The eligibility test is blunt: if you cannot write every
@@ -248,7 +254,10 @@ present at dispatch blocks the spec instead of executing it.
 - **Markdown contracts over code.** A human can edit the rules, mid-flight, without a deploy.
 - **Git as the state machine.** Directory = state, transition = commit, history = audit log. No
   database, no daemon, no scheduler.
-- **Standard library only.** A fresh clone runs. The board has no dependency surface to audit.
+- **State is never code.** STATE_HOME (`~/.drydock`) and the installed plugin are two different
+  git repositories on purpose — STATE_HOME never gets a remote, so nothing you write into a spec
+  can end up pushed anywhere by accident.
+- **Standard library only.** A fresh install runs. The board has no dependency surface to audit.
 - **Review before the PR exists.** The expensive round trip is a human reading a bad diff.
 - **Fail closed.** Preflight aborts loudly, escalation beats guessing, and a caveat is a stop.
 - **The system learns from its own arguments.** `/drydock:retro` mines unblock resolutions and
@@ -260,9 +269,15 @@ present at dispatch blocks the spec instead of executing it.
 > [!NOTE]
 > Early. The model is settled and the contracts are stable enough to run against real repositories,
 > but the surface will move: the model-routing table has two tracks (`code`, `report`) and is meant
-> to be extended, and `contracts/PRIORS.md` ships empty because priors are only true of the repos
-> that taught them. Contract disagreements are the most useful issue you can file — bring them to
+> to be extended, and `PRIORS.md` ships empty in every fresh STATE_HOME because priors are only
+> true of the repos that taught them. Contract disagreements are the most useful issue you can
+> file — bring them to
 > [Discussions](https://github.com/phspagiari/drydock/discussions).
+>
+> **Upgrading from 0.1.x:** the install model changed — the plugin is now installed via
+> `/plugin marketplace add` instead of a manual clone + symlink, and your queue moved out of that
+> clone into its own STATE_HOME (`~/.drydock`). `/drydock:install` detects the old layout and
+> offers to migrate your real queue data across; see its step 4.
 
 ## More
 

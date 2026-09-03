@@ -5,7 +5,7 @@
 Because the hard part is not orchestration, it is judgment — and judgment lives
 in the rules, not the runtime.
 
-drydock's rules are five Markdown files in [`contracts/`](../contracts/). They
+drydock's rules are five Markdown files in [`contracts/`](../plugin/contracts/). They
 are read by agents, edited by humans, versioned in git, and re-read on every
 invocation. Change `REVIEWER.md` and the next review behaves differently,
 including for a loop that is already running. No deploy, no restart, no schema
@@ -71,7 +71,7 @@ Where it goes, in rough order:
 The controls are in the spec's `budget` block (`max_agents`, `max_wall_clock`,
 `max_criteria_retries`), the hard cap of two concurrent executions, the review
 round cap of 2, and the model routing table in
-[`ORCHESTRATOR.md`](../contracts/ORCHESTRATOR.md) — which exists so `report`
+[`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md) — which exists so `report`
 work does not run on a code-tier model.
 
 The thing that actually blows a budget is not the loop; it is a spec whose
@@ -119,18 +119,24 @@ colleagues see a branch and a well-formed PR in the house style; nothing in the
 diff, the description or the commits mentions a spec id or a drydock path.
 
 That is enforced in three places rather than left to good intentions:
-[`DISPATCH.md`](../contracts/DISPATCH.md) step 7 states the rule, step 11 makes
-the executor discover the target repo's PR conventions (its PR template, its
-contributing docs, recently merged human PRs) and forbids drydock terminology
-in PR content, and the reviewer checks for leaked terminology on every pass.
+[`DISPATCH.md`](../plugin/contracts/DISPATCH.md) step 7 states the rule, step 11
+makes the executor discover the target repo's PR conventions (its PR template,
+its contributing docs, recently merged human PRs) and forbids drydock
+terminology in PR content, and the reviewer checks for leaked terminology on
+every pass.
 
-The bookkeeping lands on drydock instead: the drydock repo is the sole registry
-of which PRs are yours, and PR state is read back per **recorded URL**, never by
+The bookkeeping lands on STATE_HOME instead: it is the sole registry of which
+PRs are yours, and PR state is read back per **recorded URL**, never by
 scanning the target repo's PR list — scanning would pick up your teammates'
 work.
 
-Keep your drydock repo private if your specs quote things your teammates should
-not read. The queue is a git repo like any other.
+Your specs can quote things your teammates should not read, and STATE_HOME is
+built to make that safe by construction rather than by remembering to keep a
+clone private: it is a local-only git repository that `/drydock:install`
+creates with no remote, ever, and every skill refuses to proceed if one
+appears. There is no clone of it to accidentally make public, and no
+"remember to set this repo to private" step to forget — see
+[Architecture § STATE_HOME vs PLUGIN_HOME](ARCHITECTURE.md#state_home-vs-plugin_home).
 
 ## Does the pull request say a robot wrote it?
 
@@ -169,9 +175,9 @@ target that is flaky on a cold cache. `/drydock:retro` writes them from your own
 runs, each citing the item that taught it and the command that proves or
 disproves it today.
 
-[`examples/example-priors.md`](../examples/example-priors.md) has four
+[`examples/example-priors.md`](../plugin/examples/example-priors.md) has four
 anonymized entries as shape references. Read them for the shape; do not copy
-them into `contracts/PRIORS.md`.
+them into your `STATE_HOME/PRIORS.md`.
 
 Prune aggressively, too. A prior the evidence has made obsolete is worse than
 no prior, and the retro is instructed to remove those and say why in the commit.
@@ -183,7 +189,8 @@ It can propose them; it cannot apply them.
 `/drydock:retro` runs automatically after every ship and sorts what it finds
 into three tiers. **Priors** it appends directly — they are advisory knowledge,
 not policy. **Rule changes** go to
-[`PROPOSALS.md`](../contracts/PROPOSALS.md) with the motivating evidence, what
+`STATE_HOME/PROPOSALS.md` (seeded from
+[`PROPOSALS.seed.md`](../plugin/contracts/PROPOSALS.seed.md)) with the motivating evidence, what
 it cost in escalations and rounds, a suggested diff, and the case where the new
 rule fires wrongly. A human applies or declines them, in the review pass or a
 full sweep. **Skill defects** go back into the skill that produced them.

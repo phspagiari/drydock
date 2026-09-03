@@ -1,0 +1,14 @@
+{
+  "name": "drydock",
+  "owner": {
+    "name": "phspagiari",
+    "url": "https://github.com/phspagiari"
+  },
+  "plugins": [
+    {
+      "name": "drydock",
+      "source": "./plugin",
+      "description": "Spec-driven agentic execution for Claude Code — git-backed queue, orchestrator loop, adversarial pre-PR review, live board."
+    }
+  ]
+}

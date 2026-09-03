@@ -21,7 +21,7 @@ jobs:
       - uses: astral-sh/ruff-action@v4.1.0
         with:
           version: 0.16.5
-          args: check board/
+          args: check plugin/board/
 
   test:
     name: board tests
@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: unittest
-        run: python3 -m unittest discover board/tests --verbose
+        run: python3 -m unittest discover plugin/board/tests --verbose
 
   docs:
     name: markdown + workflows
