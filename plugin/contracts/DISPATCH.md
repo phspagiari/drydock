@@ -16,7 +16,15 @@ running loop, so fix it here first.
 ## Preflight (fail closed — abort loudly on any miss)
 
 1. Spec exists in `<STATE_HOME>/specs/inbox/<id>/SPEC.md`; frontmatter parses;
-   `track`, `target_repo`, `deliverable`, `budget` all present.
+   `track`, `target_repo`, `deliverable`, `budget` all present. The optional
+   chain fields, if present, must form a legal pair: `pr_url:` requires
+   `branch:` (there is no way to push to a pull request without naming the
+   branch it tracks), and `branch:` is never the branch every other spec is
+   cut from — `main` or `master` is what the board rejects by name, but the
+   rule is the target repo's default branch whatever it is called, because
+   chaining onto it is just committing to it. The board applies those two
+   rules to every card, so a malformed chain is visible before dispatch
+   reaches it.
 2. **Zero unresolved `[NEEDS CLARIFICATION]` markers.** If any → move to
    `<STATE_HOME>/specs/blocked/<id>/` with `QUESTION.md`; do not execute.
 3. Every acceptance-criterion command is runnable from the worktree (tools
@@ -28,6 +36,25 @@ running loop, so fix it here first.
    dirty or diverged, don't force it — branch from `origin/<default>`
    directly and note it in RUN.md). No branch is ever created from a stale
    base.
+   **A spec that declares `branch:` waives this against the default branch** —
+   it is deliberately basing on work already in flight, so "fresh off
+   `<default>`" is not what it asked for. The guarantee is replaced, not
+   dropped: after the same `fetch`, `git -C <target_repo> rev-list --count
+   <branch>..origin/<branch>` must print `0`. Anything else — the declared
+   branch is behind its remote, or has no remote counterpart at all —
+   escalates by step 2's route: `<STATE_HOME>/specs/blocked/<id>/` with a
+   `QUESTION.md`, before anything is executed. Never base on it anyway and
+   never quietly fast-forward it. The reason the waiver needs a replacement
+   rather than nothing: basing on a stale ref does not fail loudly, it fails
+   as findings that belong to other people's commits, and that has already
+   cost a whole escalation round here.
+   A spec that also declares `pr_url:` gets one more proof here, because the
+   ship step will push into that pull request rather than open one: `gh pr
+   view <pr_url> --json state,headRefName` must report `state` `OPEN` and a
+   `headRefName` equal to the declared `branch:`. A closed pull request or a
+   head-ref mismatch escalates the same way. Opening a new pull request
+   instead is not a fallback — it is the outcome the declaration exists to
+   prevent.
 
 ## Execute
 
@@ -38,9 +65,16 @@ running loop, so fix it here first.
    personal-namespace convention (default `<namespace>/drydock-<id>`).
    The worktree persists until the item lands or aborts — review and fix
    rounds happen inside it.
-   **Re-queued items that already own a PR** (spec/DELIVERABLE records a
-   `pr_url`): reuse the existing branch (`git worktree add <path>
-   <branch>`) and, at ship, push to the SAME PR — never a new branch or PR.
+   **Items that name a branch** — a re-queued item that already owns a PR
+   (spec/DELIVERABLE records a `pr_url`), or any spec whose frontmatter sets
+   `branch:` to chain onto work in flight: reuse that branch (`git worktree
+   add <path> <branch>`) instead of creating one, and where a `pr_url` is
+   recorded too, push to the SAME PR at ship — never a new branch or PR.
+   Either way, **record the commit the worktree starts at** in RUN.md as
+   `base_sha: <sha>` (`git -C <path> rev-parse HEAD`). That sha, not the
+   default branch, is what the review (REVIEWER.md step 3) and every later
+   fix round diff against, so a chained spec is judged on its own delta
+   rather than on everything its base branch already carried.
    **Repo-agnostic rule:** the target repo carries zero drydock metadata —
    no labels, tags, or spec files committed there. Branch + PR are the only
    footprint; `<STATE_HOME>` is the sole registry of which PRs are ours.
@@ -100,7 +134,13 @@ running loop, so fix it here first.
       the question. The human decides before any PR exists.
     - **ship** → NOW the draft PR is opened (`gh pr create --draft`, title +
       body verbatim from READY.md), branch pushed to the TARGET repo's
-      remote; move `<STATE_HOME>/specs/active/<id>/` →
+      remote. **Unless the item declares a `pr_url`** (spec frontmatter, or
+      DELIVERABLE.md from an earlier round): then the push is the whole of
+      it, `gh pr create` does not run, and DELIVERABLE.md records that same
+      `pr_url:`. A declared pull request that preflight (step 5) could not
+      confirm OPEN on the declared branch never gets this far — it escalated
+      — and opening a fresh PR in its place is forbidden, not a fallback.
+      Move `<STATE_HOME>/specs/active/<id>/` →
       `<STATE_HOME>/deliverables/<id>/` with `DELIVERABLE.md` (what was
       built, criteria + evidence, assumptions, frontmatter
       `pr_url:`/`report_url:`); prune the worktree. The PR lands already

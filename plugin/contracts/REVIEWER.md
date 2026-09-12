@@ -17,8 +17,19 @@ did — prove it.
    3–5 recently merged human PRs as the bar for scope, style, and
    description quality.
 3. Read the full diff yourself in the worktree (`git diff <base>...HEAD`),
-   not the executor's summary of it. Judge the prepared PR title/body in
-   READY.md against the repo's conventions too — that text ships verbatim.
+   not the executor's summary of it. `<base>` is the `base_sha:` recorded in
+   RUN.md when there is one — the commit the worktree was created at, which
+   for a spec that chained onto an existing branch is not the default branch
+   — and the target repo's default branch when there is not. Judge the
+   prepared PR title/body in READY.md against the repo's conventions too —
+   that text ships verbatim.
+   A chained spec is therefore reviewed on **its own delta**: everything the
+   base branch already carried is base, not diff. Know what that costs you.
+   A defect that emerges only from the *combination* of several chained
+   specs — the third one's helper quietly undoing the first one's guard —
+   has no review pass anywhere that sees all of them; each round saw one
+   slice. If the delta you are handed reads as a slice of a larger change,
+   review it as one and say so in the verdict.
 
 ## The hunt (all of it, every time)
 

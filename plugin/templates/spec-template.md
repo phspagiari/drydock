@@ -22,6 +22,14 @@ created: YYYY-MM-DD
 status: inbox                    # inbox -> active -> delivered | blocked -> archive
 depends_on: []                   # spec ids that must have shipped (deliverables/
                                  # or archive/) before this one is dispatch-eligible
+# branch: their/feature-branch   # optional: chain onto an EXISTING branch —
+                                 # the worktree is created on it instead of on
+                                 # a new <namespace>/drydock-<id> off the
+                                 # default branch, which is never legal here.
+                                 # Dispatch proves it is not behind its remote.
+# pr_url: <existing PR url>      # optional: push into this OPEN pull request at
+                                 # ship instead of opening a new draft one.
+                                 # Requires branch:, which must be its head ref.
 budget:
   max_agents: 4                  # hard cap on concurrent subagents
   max_wall_clock: 2h             # execution aborts and escalates past this
