@@ -74,7 +74,9 @@ latest version always wins.
      `REVIEW-r<N>.md`); **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
      with the findings as the question, notify with the unblock command;
      **ship** → open the draft PR (`gh pr create --draft`, title/body
-     verbatim from READY.md), push to the target repo's remote, move to
+     verbatim from READY.md), push to the target repo's remote — **unless
+     the item declares a `pr_url`**, and then the push is the whole of it
+     and `gh pr create` does not run — per DISPATCH step 12; move to
      `<STATE_HOME>/deliverables/<id>/` with `DELIVERABLE.md` (`pr_url:`),
      prune the worktree, commit in `<STATE_HOME>` (never pushed), notify
      ("deliverable ready: <id> — reviewed, <link>"). The human sees a PR
