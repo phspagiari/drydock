@@ -39,15 +39,31 @@ running loop, so fix it here first.
    **A spec that declares `branch:` waives this against the default branch** —
    it is deliberately basing on work already in flight, so "fresh off
    `<default>`" is not what it asked for. The guarantee is replaced, not
-   dropped: after the same `fetch`, `git -C <target_repo> rev-list --count
-   <branch>..origin/<branch>` must print `0`. Anything else — the declared
-   branch is behind its remote, or has no remote counterpart at all —
-   escalates by step 2's route: `<STATE_HOME>/specs/blocked/<id>/` with a
-   `QUESTION.md`, before anything is executed. Never base on it anyway and
-   never quietly fast-forward it. The reason the waiver needs a replacement
-   rather than nothing: basing on a stale ref does not fail loudly, it fails
-   as findings that belong to other people's commits, and that has already
-   cost a whole escalation round here.
+   dropped: after the same `fetch`, three ordered checks decide it.
+
+   - `git -C <target_repo> rev-parse --verify --quiet
+     refs/remotes/origin/<branch>` fails → the declared branch has **no
+     remote counterpart**. Escalate.
+   - `git -C <target_repo> rev-parse --verify --quiet refs/heads/<branch>`
+     fails → there is **no local ref**, which is fine, not a fault. That is
+     the ordinary shape of a branch pushed from another machine or by someone
+     else — the case this feature exists to chain onto. Step 7's `git worktree
+     add <path> <branch>` cuts it from `origin/<branch>`, which is by
+     construction fresh. Proceed.
+   - The local ref exists → `git -C <target_repo> rev-list --count
+     <branch>..origin/<branch>` must print `0`. Anything else means the local
+     ref is **behind its remote**. Escalate.
+
+   Do not collapse those into the bare `rev-list` alone: it exits 128 when
+   `<branch>` has no local ref, which makes this preflight strictly more
+   restrictive than the step 7 machinery it guards and blocks a chain that
+   would have worked.
+   An escalation here goes by step 2's route:
+   `<STATE_HOME>/specs/blocked/<id>/` with a `QUESTION.md`, before anything is
+   executed. Never base on it anyway and never quietly fast-forward it. The
+   reason the waiver needs a replacement rather than nothing: basing on a
+   stale ref does not fail loudly, it fails as findings that belong to other
+   people's commits, and that has already cost a whole escalation round here.
    A spec that also declares `pr_url:` gets one more proof here, because the
    ship step will push into that pull request rather than open one: `gh pr
    view <pr_url> --json state,headRefName` must report `state` `OPEN` and a
@@ -75,6 +91,15 @@ running loop, so fix it here first.
    default branch, is what the review (REVIEWER.md step 3) and every later
    fix round diff against, so a chained spec is judged on its own delta
    rather than on everything its base branch already carried.
+   **Two specs chaining onto the same `branch:` cannot be dispatched
+   concurrently.** Git allows one worktree per branch, so the second
+   `git worktree add <path> <branch>` dies with exit 128 (`fatal: '<branch>'
+   is already used by worktree at …`) — a raw git error, not a drydock
+   escalation — and the orchestrator runs up to 2 executions at once. For a
+   series, which is the only reason chaining exists, a `depends_on` edge
+   between consecutive members that share a branch is therefore a
+   **correctness requirement, not a convention**; they must be serialised.
+   Nothing validates that today. Whoever writes the series owns it.
    **Repo-agnostic rule:** the target repo carries zero drydock metadata —
    no labels, tags, or spec files committed there. Branch + PR are the only
    footprint; `<STATE_HOME>` is the sole registry of which PRs are ours.
@@ -167,6 +192,14 @@ running loop, so fix it here first.
     per thread), moves the item `<STATE_HOME>/deliverables/<id>/` →
     `<STATE_HOME>/specs/active/<id>/`, and dispatches a comment-fix executor
     in a worktree recreated from the PR branch.
+    **Chained items share a pull request, and this step does not know that.**
+    N items that declared the same `pr_url:` each carry their own
+    `comments_seen:` cursor over the same PR, so one human comment on it is
+    new to all N and dispatches N comment-fix executors — which then race for
+    the one branch and hit step 7's exit 128. Nothing deduplicates them.
+    Until something does, a comment round on a shared pull request is a
+    one-at-a-time operation: run it for a single item and let the others'
+    cursors catch up at ship.
 17. The comment-fix executor addresses every entry: a code change, or a
     **drafted reply** written into COMMENTS-r<N>.md — it NEVER posts to the
     PR; every word on the PR is the human's. A comment needing the human's

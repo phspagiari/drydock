@@ -47,7 +47,10 @@ latest version always wins.
    - Preflight passes → move to `<STATE_HOME>/specs/active/<id>/`, commit,
      create the worktree (`git -C <target_repo> worktree add
      <target_repo>-wt/<id> -b <namespace>/drydock-<id> origin/HEAD`
-     — adjust default branch per repo), then dispatch the executor as an
+     — adjust default branch per repo; **unless the spec declares `branch:`**,
+     and then it is `git -C <target_repo> worktree add <target_repo>-wt/<id>
+     <branch>` instead — no `-b`, no `origin/HEAD` — per DISPATCH step 7),
+     then dispatch the executor as an
      **independent background session** via Bash — NEVER the Agent tool
      (in-process subagents bloat this session and are invisible to the
      session/agent list):
