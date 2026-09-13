@@ -198,17 +198,18 @@ class TestFieldParsing(unittest.TestCase):
         self.assertEqual(server.field("track: code\n", "verdict"), "")
 
 
-#: The frontmatter of a real spec this repo's own queue already shipped, copied
-#: verbatim from archive/2026-08-31-preflight-repair/SPEC.md. Nothing written
-#: before the chain fields existed may start failing validation because of them
-#: — and this one even says "main" in its title.
+#: The frontmatter of a real spec this repo's own queue already shipped — an
+#: archived SPEC.md with its target_repo path replaced by a placeholder and
+#: nothing else touched. Nothing written before the chain fields existed may
+#: start failing validation because of them — and this one even says "main" in
+#: its title.
 ARCHIVED_SPEC = (
     "# Spec: Repair `//:preflight` and `//:golangci_lint` on `main`\n"
     "\n"
     "```yaml\n"
     "id: 2026-08-31-preflight-repair\n"
     "track: code\n"
-    "target_repo: ~/p/unico\n"
+    "target_repo: ~/p/example-repo\n"
     "deliverable: pr\n"
     "created: 2026-08-31\n"
     "status: inbox\n"
