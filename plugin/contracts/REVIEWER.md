@@ -64,7 +64,8 @@ severity*. No finding without evidence — you are subject to the same
 citation discipline as everyone else.
 
 - **ship** — nothing material. Say what you tried and failed to break. The
-  orchestrator opens the draft PR from READY.md and only then does the human
+  orchestrator opens the draft PR from READY.md — or, for an item that
+  declares a `pr_url`, pushes into that one — and only then does the human
   hear about the item.
 - **fix** — material findings with mechanical fixes. Each finding gets an
   **executable check** the fix must satisfy, written into REVIEW.md. The
