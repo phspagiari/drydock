@@ -89,6 +89,40 @@ def deps_of(spec: str) -> list[str]:
     return ids
 
 
+#: Branch names a chained spec may never declare: basing on one is not chaining,
+#: it is committing to the branch every other spec is cut from.
+DEFAULT_BRANCHES = frozenset({"main", "master"})
+
+
+def _chain_field(spec: str, key: str) -> str:
+    """A chain field's value, trailing ``# comment`` dropped.
+
+    Frontmatter lines carry one (see ``templates/spec-template.md``) and
+    :func:`field` keeps whatever follows the colon, comment included.
+    """
+    return field(spec, key).split("#")[0].strip().strip("'\"")
+
+
+def chain_errors(spec: str) -> list[str]:
+    """Why this spec's ``branch:``/``pr_url:`` pair cannot be dispatched.
+
+    One human-readable message per violated rule; empty when the chain is
+    dispatchable. Neither field set is the default path and valid, and
+    ``branch:`` alone is valid too — it chains onto an existing branch and
+    still opens a new pull request at ship.
+    """
+    branch = _chain_field(spec, "branch")
+    pr_url = _chain_field(spec, "pr_url")
+    errors = []
+    if pr_url and not branch:
+        errors.append("pr_url: is set without branch: — a pull request cannot be "
+                      "pushed to without naming the branch it tracks")
+    if branch in DEFAULT_BRANCHES:
+        errors.append(f"branch: is {branch} — that commits to the default branch "
+                      "instead of chaining onto work in flight")
+    return errors
+
+
 def state_dir(root: Path, state: str) -> Path:
     if state == "delivered":
         return root / "deliverables"
@@ -119,7 +153,12 @@ def _question_gist(question: str) -> str:
 
 
 def _gist_of(root: Path, state: str, spec: str, question: str) -> str:
-    """One line of context: the blocker, or the dependencies still unmet."""
+    """One line of context: a broken chain, the blocker, or unmet dependencies."""
+    broken = chain_errors(spec)
+    if broken:
+        # A chain that cannot be dispatched outranks whatever status the card
+        # would otherwise carry — it is a defect in the spec, not a state.
+        return "chain error: " + "; ".join(broken)
     if state == "blocked":
         return _question_gist(question)
     if state == "inbox":
@@ -150,6 +189,11 @@ def scan_item(root: Path, item: Path, state: str) -> dict:
         "id": item.name,
         "title": _title_of(spec, item.name),
         "track": field(spec, "track") or "?",
+        # The chain this spec declares, straight from its frontmatter — the
+        # deliverable's own pr_url below is a different thing (where it landed).
+        "branch": _chain_field(spec, "branch"),
+        "pr_url": _chain_field(spec, "pr_url"),
+        "chain_errors": chain_errors(spec),
         "mtime": int(item.stat().st_mtime),
         "gist": _gist_of(root, state, spec, question),
         "kind": "pr" if pr else ("report" if url else ""),

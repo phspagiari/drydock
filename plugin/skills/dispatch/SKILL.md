@@ -32,7 +32,10 @@ skill only adds argument handling on top.
 3. Move to `<STATE_HOME>/specs/active/<id>/`, commit `dispatch: <id> -> active`.
 4. Worktree per DISPATCH.md, branch `<namespace>/drydock-<id>` (namespace
    from `<STATE_HOME>/config`) off the target repo's default branch, from a
-   freshly fetched base.
+   freshly fetched base — **unless the spec declares `branch:`**, and then
+   the worktree is created on that existing branch (`git worktree add <path>
+   <branch>`, no `-b`) per DISPATCH step 7, once step 5's staleness proof has
+   passed at preflight.
 5. Launch the executor as an independent background session:
    `cd <worktree> && claude --bg --model <model> --permission-mode
    <permission-mode> "<DISPATCH step-8 prompt>"` — model from the routing

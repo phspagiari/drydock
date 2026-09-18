@@ -47,7 +47,10 @@ latest version always wins.
    - Preflight passes → move to `<STATE_HOME>/specs/active/<id>/`, commit,
      create the worktree (`git -C <target_repo> worktree add
      <target_repo>-wt/<id> -b <namespace>/drydock-<id> origin/HEAD`
-     — adjust default branch per repo), then dispatch the executor as an
+     — adjust default branch per repo; **unless the spec declares `branch:`**,
+     and then it is `git -C <target_repo> worktree add <target_repo>-wt/<id>
+     <branch>` instead — no `-b`, no `origin/HEAD` — per DISPATCH step 7),
+     then dispatch the executor as an
      **independent background session** via Bash — NEVER the Agent tool
      (in-process subagents bloat this session and are invisible to the
      session/agent list):
@@ -71,7 +74,9 @@ latest version always wins.
      `REVIEW-r<N>.md`); **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
      with the findings as the question, notify with the unblock command;
      **ship** → open the draft PR (`gh pr create --draft`, title/body
-     verbatim from READY.md), push to the target repo's remote, move to
+     verbatim from READY.md), push to the target repo's remote — **unless
+     the item declares a `pr_url`**, and then the push is the whole of it
+     and `gh pr create` does not run — per DISPATCH step 12; move to
      `<STATE_HOME>/deliverables/<id>/` with `DELIVERABLE.md` (`pr_url:`),
      prune the worktree, commit in `<STATE_HOME>` (never pushed), notify
      ("deliverable ready: <id> — reviewed, <link>"). The human sees a PR

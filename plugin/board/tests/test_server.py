@@ -43,6 +43,21 @@ def build_fixture(root: Path) -> None:
           "  # - commented-out   # must not count\n"
           "\n# Waiting on an upstream\n")
 
+    # --- inbox: a well-formed chain, and one that cannot be dispatched ---
+    write(root / "specs/inbox/inbox-chained/SPEC.md",
+          "# Spec: Chained onto work in flight\n\n"
+          "```yaml\n"
+          "id: inbox-chained\n"
+          "track: code\n"
+          "branch: someone/feature-branch   # already open upstream\n"
+          "pr_url: https://github.com/example/repo/pull/42\n"
+          "depends_on: []\n"
+          "```\n")
+    write(root / "specs/inbox/inbox-chain-broken/SPEC.md",
+          "track: code\n"
+          "pr_url: https://github.com/example/repo/pull/43\n"
+          "\n# Spec: A pull request with no branch\n")
+
     # --- active: plain vs handed off for review --------------------------
     write(root / "specs/active/active-plain/SPEC.md",
           "track: code\n\n# Spec: Under construction\n")
@@ -183,6 +198,86 @@ class TestFieldParsing(unittest.TestCase):
         self.assertEqual(server.field("track: code\n", "verdict"), "")
 
 
+#: The frontmatter of a real spec this repo's own queue already shipped — an
+#: archived SPEC.md with its target_repo path replaced by a placeholder and
+#: nothing else touched. Nothing written before the chain fields existed may
+#: start failing validation because of them — and this one even says "main" in
+#: its title.
+ARCHIVED_SPEC = (
+    "# Spec: Repair `//:preflight` and `//:golangci_lint` on `main`\n"
+    "\n"
+    "```yaml\n"
+    "id: 2026-08-31-preflight-repair\n"
+    "track: code\n"
+    "target_repo: ~/p/example-repo\n"
+    "deliverable: pr\n"
+    "created: 2026-08-31\n"
+    "status: inbox\n"
+    "depends_on: []\n"
+    "budget:\n"
+    "  max_agents: 4\n"
+    "  max_wall_clock: 4h\n"
+    "  max_criteria_retries: 2\n"
+    "```\n"
+)
+
+
+class TestChainErrors(unittest.TestCase):
+    """The five chaining rules, as rules — no queue, no server."""
+
+    def test_pr_url_without_branch_is_an_error(self):
+        errors = server.chain_errors("track: code\npr_url: https://x/pull/1\n")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("pr_url:", errors[0])
+        self.assertIn("branch:", errors[0])
+
+    def test_default_branch_is_an_error(self):
+        for name in ["main", "master"]:
+            with self.subTest(branch=name):
+                errors = server.chain_errors(f"track: code\nbranch: {name}\n")
+                self.assertEqual(len(errors), 1)
+                self.assertIn(name, errors[0])
+
+    def test_branch_with_pr_url_is_valid(self):
+        self.assertEqual(
+            server.chain_errors("branch: someone/wip\npr_url: https://x/pull/1\n"), [])
+
+    def test_neither_field_is_valid(self):
+        self.assertEqual(server.chain_errors("track: code\n\n# Spec: Ordinary\n"), [])
+
+    def test_branch_alone_is_valid(self):
+        self.assertEqual(server.chain_errors("track: code\nbranch: someone/wip\n"), [])
+
+    def test_the_two_rules_are_independent(self):
+        # branch: main carrying a pull request breaks rule 2 only. Rule 1 is
+        # about a MISSING branch; this one is present, merely the wrong one.
+        errors = server.chain_errors("branch: main\npr_url: https://x/pull/1\n")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("main", errors[0])
+        self.assertNotIn("without branch:", errors[0])
+
+    def test_trailing_comment_is_not_part_of_the_value(self):
+        self.assertEqual(server._chain_field("branch: main   # the default one\n",
+                                             "branch"), "main")
+        self.assertEqual(len(server.chain_errors("branch: main  # chain here\n")), 1)
+
+    def test_commented_out_fields_are_not_set(self):
+        spec = "# branch: their/feature-branch\n# pr_url: https://x/pull/1\n"
+        self.assertEqual(server._chain_field(spec, "branch"), "")
+        self.assertEqual(server.chain_errors(spec), [])
+
+    def test_the_shipped_template_validates(self):
+        template = Path(__file__).resolve().parents[2] / "templates/spec-template.md"
+        text = template.read_text()
+        self.assertIn("branch:", text)
+        self.assertIn("pr_url:", text)
+        self.assertEqual(server.chain_errors(text), [])
+
+    def test_an_already_archived_spec_still_validates(self):
+        self.assertEqual(server.chain_errors(ARCHIVED_SPEC), [])
+        self.assertEqual(server._chain_field(ARCHIVED_SPEC, "branch"), "")
+
+
 class TestScan(BoardTestCase):
     def test_all_states_present(self):
         state = server.scan(self.root)
@@ -195,7 +290,7 @@ class TestScan(BoardTestCase):
         state = server.scan(self.root)
         self.assertEqual(sorted(r["id"] for r in state["archive"]),
                          ["arch-old", "arch-untitled"])
-        self.assertEqual(len(state["inbox"]), 2)
+        self.assertEqual(len(state["inbox"]), 4)
         self.assertEqual(len(state["active"]), 2)
         self.assertEqual(len(state["blocked"]), 3)
         self.assertEqual(len(state["delivered"]), 3)
@@ -241,6 +336,25 @@ class TestScan(BoardTestCase):
         row = self.item("blocked", "blocked-prose")
         self.assertEqual(row["track"], "code")
         self.assertEqual(row["title"], "Fenced frontmatter")
+
+    def test_chain_fields_reach_the_card(self):
+        row = self.item("inbox", "inbox-chained")
+        self.assertEqual(row["branch"], "someone/feature-branch")
+        self.assertEqual(row["pr_url"], "https://github.com/example/repo/pull/42")
+        self.assertEqual(row["chain_errors"], [])
+        self.assertEqual(row["gist"], "")
+
+    def test_an_unchained_spec_carries_empty_chain_fields(self):
+        row = self.item("inbox", "inbox-ready")
+        self.assertEqual(row["branch"], "")
+        self.assertEqual(row["pr_url"], "")
+        self.assertEqual(row["chain_errors"], [])
+
+    def test_a_broken_chain_becomes_the_gist(self):
+        row = self.item("inbox", "inbox-chain-broken")
+        self.assertEqual(len(row["chain_errors"]), 1)
+        self.assertTrue(row["gist"].startswith("chain error: "), row["gist"])
+        self.assertIn(row["chain_errors"][0], row["gist"])
 
     def test_pr_url_passes_through(self):
         row = self.item("delivered", "dep-done")
