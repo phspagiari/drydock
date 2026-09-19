@@ -106,12 +106,28 @@ running loop, so fix it here first.
 8. Start a fresh Claude session in the worktree with the prompt:
    *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md`. First read
    `<STATE_HOME>/PRIORS.md` (lessons from prior runs) and
-   `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 — they govern how you
-   verify, get ready, and escalate. You do NOT open a PR — ever. Follow the
-   spec exactly: respect Non-goals and blast radius, stop on any escalation
-   condition and write QUESTION.md instead of guessing. Work plan-first:
-   execute the spec's requirements in order and verify each before moving on.
-   Log to `<STATE_HOME>/specs/active/<id>/RUN.md` as you go."*
+   `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific to this
+   target repo), then `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 — they
+   govern how you verify, get ready, and escalate. You do NOT open a PR —
+   ever. Follow the spec exactly: respect Non-goals and blast radius, stop on
+   any escalation condition and write QUESTION.md instead of guessing. Work
+   plan-first: execute the spec's requirements in order and verify each before
+   moving on. Log to `<STATE_HOME>/specs/active/<id>/RUN.md` as you go."*
+
+   **Priors are hot plus cold, and each phase loads only its own.**
+   `<STATE_HOME>/PRIORS.md` is the hot file: global, always loaded, and kept
+   short on purpose. The cold files live in `<STATE_HOME>/priors/` —
+   `<slug>.md` per target repo, where `<slug>` is the basename of the spec's
+   `target_repo` (`~/code/ledger-api` → `priors/ledger-api.md`), and
+   underscore-prefixed phase files (`_spec-writing.md`, `_pr-prose.md`,
+   `_review.md`) that belong to one phase rather than to one repo.
+   Substitute the real slug into the prompt; a repo with no cold file yet is
+   the ordinary case, not a fault.
+   An executor loads the hot file and its repo's cold file and **nothing
+   else** — `_spec-writing.md` is `/drydock:spec`'s, `_review.md` is the
+   reviewer's, and `_pr-prose.md` arrives at step 11 and not before. A
+   STATE_HOME still holding one monolithic `PRIORS.md` is a pre-split one:
+   it loads whole and correctly, and `/drydock:install` migrates it.
 9. Executor runs all acceptance criteria itself, saving raw output under
    `<STATE_HOME>/specs/active/<id>/evidence/`. Failures get up to
    `max_criteria_retries` fix attempts, then escalate.
@@ -138,7 +154,10 @@ running loop, so fix it here first.
     design: after an unblock, a FRESH executor continues from the amended
     spec + branch + RUN.md, never the old session. Unpushed work in a pruned
     worktree is lost work.
-11. **All clean** → write `<STATE_HOME>/specs/active/<id>/READY.md`: criteria
+11. **All clean** → read `<STATE_HOME>/priors/_pr-prose.md` if it exists —
+    the phase file for exactly this step, and the one place the loop has
+    recorded what prepared PR bodies keep getting wrong — then write
+    `<STATE_HOME>/specs/active/<id>/READY.md`: criteria
     table with evidence paths, assumptions, and the **prepared PR title +
     body** (or report location). PR content follows the TARGET repo's
     conventions, discovered in this order: the spec's Context pointers, the

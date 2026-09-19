@@ -31,21 +31,30 @@ the discussion phase by writing `<STATE_HOME>/specs/inbox/<id>/SPEC.md` from
 
 ## Procedure
 
-1. Re-read the session and draft, in order: Goal, Non-goals, Constraints &
+1. Read `<STATE_HOME>/PRIORS.md` (hot, global) and
+   `<STATE_HOME>/priors/_spec-writing.md` if it exists — the cold phase file
+   for this skill, where past retros recorded what specs chronically
+   under-specify. Those two and nothing else: the per-repo cold files
+   (`<STATE_HOME>/priors/<slug>.md`) are the executor's and the reviewer's,
+   and a spec session that reads them starts writing the implementation. A
+   STATE_HOME still holding one monolithic `PRIORS.md` and no `priors/`
+   directory is a pre-split one — read it whole; `/drydock:install` migrates
+   it.
+2. Re-read the session and draft, in order: Goal, Non-goals, Constraints &
    blast radius, Requirements, Acceptance criteria, Escalation additions,
    Assumptions. Pull Context pointers as paths/links, not prose.
-2. Show the two sections that gate everything — **Acceptance criteria** and
+3. Show the two sections that gate everything — **Acceptance criteria** and
    **Assumptions** — in chat for confirmation before writing the file. (The
    rest is reviewed in the file itself.)
-3. Pick `id` = `YYYY-MM-DD-short-slug`. Fill frontmatter: `track`,
+4. Pick `id` = `YYYY-MM-DD-short-slug`. Fill frontmatter: `track`,
    `target_repo`, `deliverable`, `budget` (defaults: 4 agents / 2h / 2
    retries — scale down for small work, never up without asking), and
    `depends_on` — if this work builds on another spec's outcome, list that
    id; the orchestrator won't dispatch it until the dependency has shipped.
    Ask when ordering seems to matter and nobody has said.
-4. Write `<STATE_HOME>/specs/inbox/<id>/SPEC.md`. Commit in `<STATE_HOME>`
+5. Write `<STATE_HOME>/specs/inbox/<id>/SPEC.md`. Commit in `<STATE_HOME>`
    (never pushed — it has no remote): `spec: <id>`.
-5. Report: spec id, dispatch state (dispatchable, or blocked on N
+6. Report: spec id, dispatch state (dispatchable, or blocked on N
    clarifications), and the next action — the orchestrator picks it up on its
    next tick, or `/drydock:dispatch <id>` runs it now.
 

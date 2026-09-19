@@ -19,6 +19,15 @@ You know the target repo's rules better than the executor did — prove it.
    by default), its CLAUDE.md / CONTRIBUTING / engineering standards, and
    3–5 recently merged human PRs as the bar for scope, style, and
    description quality.
+   Priors are split hot/cold (DISPATCH step 8). Read three of them and no
+   more: the hot `<STATE_HOME>/PRIORS.md`, `<STATE_HOME>/priors/<slug>.md`
+   for this spec's `target_repo` (basename — `~/code/ledger-api` →
+   `priors/ledger-api.md`), and `<STATE_HOME>/priors/_review.md`, the phase
+   file for this pass. Any of the three may be absent; that is not a fault.
+   You deliberately do **not** read the executor's other phase files — you are
+   grounding your own judgement, not replaying theirs. A STATE_HOME still
+   holding one monolithic `PRIORS.md` and no `priors/` directory is a
+   pre-split one: read it whole.
 3. Read the full diff yourself in the worktree (`git diff <base>...HEAD`),
    not the executor's summary of it. `<base>` is the `base_sha:` recorded in
    RUN.md when there is one — the commit the worktree was created at, which
