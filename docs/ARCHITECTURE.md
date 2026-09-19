@@ -21,10 +21,10 @@ rather than cosmetic:
   changes only via `/plugin update`.
 - **STATE_HOME** is `~/.drydock` by default (override with
   `$DRYDOCK_STATE_HOME`) — `specs/`, `deliverables/`, `archive/`,
-  `PRIORS.md`, `PROPOSALS.md`, `config`, `.orchestrator-heartbeat`. A plain
-  local git repository, created by `/drydock:install`, and **never given a
-  remote** — every contract and skill treats a configured remote there as a
-  hard stop, not a warning.
+  `PRIORS.md`, `priors/`, `PROPOSALS.md`, `config`,
+  `.orchestrator-heartbeat`. A plain local git repository, created by
+  `/drydock:install`, and **never given a remote** — every contract and skill
+  treats a configured remote there as a hard stop, not a warning.
 
 The split exists because those two things have opposite trust boundaries.
 PLUGIN_HOME is shared, versioned, and meant to be the same across everyone
@@ -48,7 +48,7 @@ tells the next one everything it needs.
 |---|---|---|---|---|
 | **Spec session** | Your normal work session | The conversation you were already having | `<STATE_HOME>/specs/inbox/<id>/SPEC.md` | The length of the discussion |
 | **Orchestrator** | A pinned pane, longest-running model | [`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md) + [`DISPATCH.md`](../plugin/contracts/DISPATCH.md) (in PLUGIN_HOME), every tick | Queue moves, commits, notifications (in STATE_HOME) | Hours to days |
-| **Executor** | A background session in a git worktree | `SPEC.md`, `<STATE_HOME>/PRIORS.md`, DISPATCH steps 9–11 | Code on a branch, `RUN.md`, then `READY.md` **or** `QUESTION.md` | One spec, one attempt |
+| **Executor** | A background session in a git worktree | `SPEC.md`, `<STATE_HOME>/PRIORS.md` + its repo's `priors/<slug>.md`, DISPATCH steps 9–11 | Code on a branch, `RUN.md`, then `READY.md` **or** `QUESTION.md` | One spec, one attempt |
 | **Reviewer** | A background session on the worktree | [`REVIEWER.md`](../plugin/contracts/REVIEWER.md), the diff, the target repo's conventions | `REVIEW.md` — nothing else, ever | One review round |
 | **Review pass** | You, once a day | `<STATE_HOME>/deliverables/`, `<STATE_HOME>/specs/blocked/` | Verdicts: approve, reject fast, reject slow | Minutes |
 
@@ -261,7 +261,7 @@ alone, and sorts what it finds into exactly one of three tiers:
 
 | Tier | Lands in | Applied by |
 |---|---|---|
-| **Prior** — an advisory fact about a repo, build system or reviewer | `PRIORS.md` in STATE_HOME (seeded from [`PRIORS.seed.md`](../plugin/contracts/PRIORS.seed.md)) | The retro, directly. Priors are knowledge, not policy |
+| **Prior** — an advisory fact about a repo, build system or reviewer | `PRIORS.md` in STATE_HOME if it is global (seeded from [`PRIORS.seed.md`](../plugin/contracts/PRIORS.seed.md)), otherwise the `priors/` file its scope implies — see [Priors are hot plus cold](#priors-are-hot-plus-cold) | The retro, directly. Priors are knowledge, not policy |
 | **Rule** — a process failure no prior can fix | `PROPOSALS.md` in STATE_HOME (seeded from [`PROPOSALS.seed.md`](../plugin/contracts/PROPOSALS.seed.md)), with evidence, cost, risk and a suggested diff | **A human only**, in the review pass or a full sweep |
 | **Skill defect** — a plugin skill produced the failure | The skill itself | Whatever skill-improvement pass you use |
 
@@ -276,3 +276,22 @@ executors — it will be cited confidently and be wrong. See
 [`examples/example-priors.md`](../plugin/examples/example-priors.md) for the shape of
 one worth keeping: a named mechanism, the command that proves or disproves it
 today, and the item that taught it.
+
+### Priors are hot plus cold
+
+Priors are one file per *audience*, not one file. `<STATE_HOME>/PRIORS.md` is
+the **hot** file: global, loaded by every actor on every run, and kept to
+roughly 50 lines of entries because everything in it is paid for by everyone.
+The **cold** files sit in `<STATE_HOME>/priors/` and load conditionally —
+`<slug>.md` (the basename of the spec's `target_repo`) for the executor and
+the reviewer working that repo, and the underscore-prefixed phase files
+`_spec-writing.md`, `_pr-prose.md` and `_review.md` for `/drydock:spec`, for
+the executor at READY, and for the reviewer. The retro is the only actor that
+reads all of them, because it is the one that writes them, and its Distill
+step is where a lesson's scope decides its file. The loading rule itself lives
+in [`DISPATCH.md`](../plugin/contracts/DISPATCH.md) step 8; the rationale, and
+the incremental-view-maintenance framing the layout came out of, are in
+[the design note](design/2026-09-18-ivm-priors.md). A STATE_HOME that predates
+the split has one monolithic file and keeps working — `/drydock:install` runs
+`plugin/board/split_priors.py` over it once, splitting on the `## Target
+repo:` and topic headings such a file has already grown on its own.
