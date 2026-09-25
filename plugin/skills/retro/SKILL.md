@@ -123,16 +123,23 @@ description: Self-improvement pass over drydock's own history — mine unblock d
 
   **The code cursor.** A repo's cold file may carry one
   `<!-- code-cursor: <full sha> -->` line directly under its
-  `## Target repo:` heading — the commit its priors were last validated
-  against. Dispatch preflight (DISPATCH step 5) compares it to the repo and
-  flags the priors the repo has moved past; nothing deletes them. Only you
-  move it, and only after re-validating. Run `python3
-  <PLUGIN_HOME>/board/priors_check.py stale --repo <path> --priors
-  <STATE_HOME>/priors/<slug>.md` now rather than trusting an item's
-  `PRIORS-STALE.md` (the repo may have moved again since), re-read every
-  `STALE` entry against the repo, and confirm or prune each. Then, and only
-  then, `priors_check.py advance` with the same arguments. A retro that did
-  not re-validate a repo leaves its cursor where it was.
+  `## Target repo:` heading — the mainline commit its priors were last
+  validated against. The cursor ref is `origin/<default>`, resolved through
+  `refs/remotes/origin/HEAD`, never the primary checkout's `HEAD`: the
+  human's checkout may sit on any branch, and the cursor tracks mainline.
+  Dispatch preflight (DISPATCH step 5) compares it to that ref and flags
+  the priors mainline has moved past; nothing deletes them. Only you move
+  it, and only after re-validating. No cold file for the repo yet (a
+  pre-split STATE_HOME) → nothing to advance; skip the repo — `stale`
+  reads `NOCURSOR` and `advance` exits non-zero on the missing file, which
+  is not an error here. Otherwise run `git -C <path> fetch origin` (the
+  checker never fetches), then `python3 <PLUGIN_HOME>/board/priors_check.py
+  stale --repo <path> --priors <STATE_HOME>/priors/<slug>.md` now rather
+  than trusting an item's `PRIORS-STALE.md` (mainline may have moved again
+  since), re-read every `STALE` entry against `origin/<default>`, and
+  confirm or prune each. Then, and only then, `priors_check.py advance`
+  with the same arguments. A retro that did not re-validate a repo leaves
+  its cursor where it was.
 - **Rule** (process failure a prior can't fix): draft the amendment to
   `<PLUGIN_HOME>/contracts/DISPATCH.md` / `REVIEWER.md` / `ORCHESTRATOR.md` /
   `<PLUGIN_HOME>/templates/spec-template.md`, show the diff and the incident

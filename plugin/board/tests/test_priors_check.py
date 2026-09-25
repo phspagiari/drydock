@@ -2,8 +2,10 @@
 
     python3 -m unittest discover plugin/board/tests
 
-Parsing runs on in-memory text; the cursor cases run against a throwaway git
-repository with two commits, so ``HEAD`` really moves between them. The
+Parsing runs on in-memory text; the cursor cases run against a throwaway
+bare ``origin`` with two commits on ``main`` and a clone of it, so the
+mainline really moves between them -- and the clone's checkout can sit
+somewhere else entirely, which is the case the cursor ref exists for. The
 round-trip case pushes full-format records through ``split_priors`` and
 checks that nothing about them changed on the way.
 """
@@ -165,26 +167,41 @@ class TestRecordFormat(unittest.TestCase):
 
 
 class TestCursor(unittest.TestCase):
+    """``self.head`` is ``origin/main``'s sha -- the cursor ref -- throughout."""
+
     def setUp(self):
         self._tmp = TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         root = Path(self._tmp.name)
+        self.origin = root / "origin.git"
+        self.seed = root / "seed"
         self.repo = root / "repo"
-        self.repo.mkdir()
-        git(self.repo, "init", "-q")
-        for n in (1, 2):
-            (self.repo / "f.txt").write_text(f"{n}\n")
-            git(self.repo, "add", "f.txt")
-            git(self.repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
-                "commit", "-q", "-m", f"c{n}")
-        self.first = git(self.repo, "rev-parse", "HEAD~1")
-        self.head = git(self.repo, "rev-parse", "HEAD")
+        git(root, "init", "-q", "--bare", "-b", "main", str(self.origin))
+        git(root, "init", "-q", "-b", "main", str(self.seed))
+        git(self.seed, "remote", "add", "origin", str(self.origin))
+        self.push_commit(1)
+        self.push_commit(2)
+        git(root, "clone", "-q", str(self.origin), str(self.repo))
+        self.first = git(self.repo, "rev-parse", "origin/main~1")
+        self.head = git(self.repo, "rev-parse", "origin/main")
         self.priors = root / "ledger-api.md"
         self.priors.write_text(FULL + "\n" + LEGACY.split("\n", 2)[2], encoding="utf-8")
 
-    def stale(self) -> tuple[int, list[str]]:
-        code, out, _ = run("stale", "--repo", str(self.repo), "--priors", str(self.priors))
+    def push_commit(self, n: int) -> str:
+        (self.seed / "f.txt").write_text(f"{n}\n")
+        git(self.seed, "add", "f.txt")
+        git(self.seed, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+            "commit", "-q", "-m", f"c{n}")
+        git(self.seed, "push", "-q", "origin", "main")
+        return git(self.seed, "rev-parse", "HEAD")
+
+    def stale(self, *extra: str) -> tuple[int, list[str]]:
+        code, out, _ = run("stale", "--repo", str(self.repo), "--priors", str(self.priors),
+                           *extra)
         return code, out.splitlines()
+
+    def advance(self, *extra: str) -> tuple[int, str, str]:
+        return run("advance", "--repo", str(self.repo), "--priors", str(self.priors), *extra)
 
     def set_cursor(self, line: str) -> None:
         text = self.priors.read_text(encoding="utf-8")
@@ -239,7 +256,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(lines[4:], before.splitlines()[2:])
         self.assertEqual(self.stale(), (0, []))
         self.assertEqual(sorted(p.name for p in self.priors.parent.iterdir()),
-                         ["ledger-api.md", "repo"])
+                         ["ledger-api.md", "origin.git", "repo", "seed"])
 
     def test_advance_on_a_file_with_no_heading_writes_the_top_line(self):
         self.priors.write_text("- **[a/b]** Claim.\n", encoding="utf-8")
@@ -272,7 +289,65 @@ class TestCursor(unittest.TestCase):
         code, _, err = run("stale", "--repo", str(self.priors.parent / "nope"),
                            "--priors", str(self.priors))
         self.assertEqual(code, 2)
-        self.assertIn("rev-parse HEAD failed", err)
+        self.assertIn("cannot resolve", err)
+
+    def test_cursor_tracks_mainline_not_the_checkout(self):
+        # The human's checkout is parked on a side branch behind mainline.
+        git(self.repo, "checkout", "-q", "-b", "side", self.first)
+        checkout = git(self.repo, "rev-parse", "HEAD")
+        self.assertEqual(checkout, self.first)
+        code, out, _ = self.advance()
+        self.assertEqual((code, out), (0, f"code-cursor: {self.head}\n"))
+        self.assertEqual(priors_check.read_cursor(self.priors), self.head)
+        self.assertEqual(self.stale(), (0, []))
+
+        third = self.push_commit(3)
+        self.assertEqual(self.stale(), (0, []))  # the checker never fetches
+        git(self.repo, "fetch", "-q", "origin")
+        self.assertEqual(git(self.repo, "rev-parse", "origin/main"), third)
+        code, lines = self.stale()
+        self.assertEqual(code, 0)
+        self.assertEqual([line.split()[:2] for line in lines],
+                         [["STALE", "ledger-api/git-fetch"], ["STALE", "ledger-api/L13"]])
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), checkout)
+
+    def test_a_repeated_field_fails_whether_or_not_the_ref_moved(self):
+        text = self.priors.read_text(encoding="utf-8").replace(
+            "  - asserted: 2026-06-02\n", "  - asserted: 2026-06-02\n  - asserted: 2026-06-03\n")
+        for cursor in (self.head, self.first):
+            with self.subTest(moved=cursor != self.head):
+                self.priors.write_text(text, encoding="utf-8")
+                self.set_cursor(f"<!-- code-cursor: {cursor} -->")
+                code, out, err = run("stale", "--repo", str(self.repo),
+                                     "--priors", str(self.priors))
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("second asserted:", err)
+        self.priors.write_text(text, encoding="utf-8")
+        before = self.priors.read_text(encoding="utf-8")
+        self.assertEqual(self.advance()[0], 2)
+        self.assertEqual(self.priors.read_text(encoding="utf-8"), before)
+
+    def test_no_origin_head_exits_2_naming_the_fix(self):
+        git(self.repo, "remote", "set-head", "origin", "-d")
+        self.set_cursor(f"<!-- code-cursor: {self.head} -->")
+        before = self.priors.read_text(encoding="utf-8")
+        for code, _, err in (run("stale", "--repo", str(self.repo),
+                                 "--priors", str(self.priors)), self.advance()):
+            self.assertEqual(code, 2)
+            self.assertIn("remote set-head origin -a", err)
+        self.assertEqual(self.priors.read_text(encoding="utf-8"), before)
+        self.assertEqual(self.stale("--ref", "origin/main"), (0, []))
+
+    def test_ref_overrides_the_mainline(self):
+        self.set_cursor(f"<!-- code-cursor: {self.head} -->")
+        self.assertEqual(len(self.stale("--ref", self.first)[1]), 2)
+        code, out, _ = self.advance("--ref", self.first)
+        self.assertEqual((code, out), (0, f"code-cursor: {self.first}\n"))
+        self.assertEqual(self.stale("--ref", self.first), (0, []))
+        code, _, err = self.advance("--ref", "no-such-ref")
+        self.assertEqual(code, 2)
+        self.assertIn("cannot resolve no-such-ref", err)
+        self.assertEqual(self.advance("--ref=--output=x")[0], 2)
 
 
 class TestSplitRoundTrip(unittest.TestCase):

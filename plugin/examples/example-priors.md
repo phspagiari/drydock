@@ -77,7 +77,8 @@ or `.` as a path glob. The ones after it are **legacy** bullets, which stay
 legal and parse as `depends_on: unknown` — never auto-invalidated. The
 `code-cursor` line under the heading is the commit these priors were last
 validated against: dispatch preflight lists every prior in the file as stale
-once the repo's `HEAD` differs from it, and only the retro advances it.
+once the repo's mainline, `origin/<default>`, differs from it, and only the
+retro advances it.
 
 ```markdown
 ## Target repo: ~/code/ledger-api

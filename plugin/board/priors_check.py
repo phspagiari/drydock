@@ -2,8 +2,8 @@
 """Parse prior records and flag the ones whose repo has moved past its cursor.
 
     python3 <PLUGIN_HOME>/board/priors_check.py parse <file>
-    python3 <PLUGIN_HOME>/board/priors_check.py stale --repo <path> --priors <file>
-    python3 <PLUGIN_HOME>/board/priors_check.py advance --repo <path> --priors <file>
+    python3 <PLUGIN_HOME>/board/priors_check.py stale --repo <path> --priors <file> [--ref <ref>]
+    python3 <PLUGIN_HOME>/board/priors_check.py advance --repo <path> --priors <file> [--ref <ref>]
 
 A prior is a top-level bullet. The full record format is::
 
@@ -23,9 +23,15 @@ A priors file may carry one ``<!-- code-cursor: <full sha> -->`` line (the
 bare ``code-cursor: <sha>`` form parses too): the target-repo commit its
 priors were last validated against. In a cold repo file it sits directly
 under the ``## Target repo:`` heading, so ``split_priors.py`` moves it with
-the section. ``stale`` compares it to the repo's ``HEAD`` by exact string --
+the section. ``stale`` compares it to the repo's cursor ref by exact string --
 "moved" means "differs", deliberately, not an ancestry test -- and
 ``advance`` is the only thing besides the retro that writes it.
+
+The cursor ref is the repo's mainline, ``origin/<default>``, resolved through
+``refs/remotes/origin/HEAD``. It is never the checkout's ``HEAD``: the human's
+checkout may be parked on any branch, and the cursor exists to notice
+mainline moving under a prior. ``--ref`` overrides it (tests, and repos with
+no ``origin/HEAD``). This never fetches; callers fetch first.
 
 This flags; it never deletes a prior. Standard library only, like the rest of
 ``board/``.
@@ -203,26 +209,47 @@ def read_cursor(path: Path) -> str | None:
     return found[0][1] if found else None
 
 
-def head_sha(repo: Path) -> str:
-    done = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+MAINLINE = "refs/remotes/origin/HEAD"
+
+
+def ref_sha(repo: Path, ref: str | None = None) -> str:
+    """Full sha of ``ref``, by default the repo's mainline ``origin/HEAD``."""
+    target = ref or MAINLINE
+    if target.startswith("-"):
+        raise PriorsError(f"not a ref: {target!r}")
+    done = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet",
+                           f"{target}^{{commit}}"],
                           capture_output=True, text=True, check=False)
-    if done.returncode != 0:
-        raise PriorsError(f"git rev-parse HEAD failed in {repo}: {done.stderr.strip()}")
-    return done.stdout.strip()
+    if done.returncode == 0:
+        return done.stdout.strip()
+    if ref is None and subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-dir"],
+                                      capture_output=True, check=False).returncode == 0:
+        raise PriorsError(f"{repo}: {MAINLINE} is not set, so origin's default branch "
+                          f"is unknown; run 'git -C {repo} remote set-head origin -a' "
+                          f"or pass --ref")
+    raise PriorsError(f"{repo}: cannot resolve {target} to a commit: "
+                      f"{done.stderr.strip() or 'not a git repository or no such ref'}")
 
 
-def stale_lines(repo: Path, priors: Path) -> list[str]:
-    """``NOCURSOR``, nothing (cursor == HEAD), or one ``STALE`` line per prior."""
+def stale_lines(repo: Path, priors: Path, ref: str | None = None) -> list[str]:
+    """``NOCURSOR``, nothing (cursor == ref), or one ``STALE`` line per prior.
+
+    The file is parsed before the cursor is compared, so a malformed record
+    fails the same way whether or not the repo moved.
+    """
+    if not priors.is_file():
+        return ["NOCURSOR"]
+    records = parse_file(priors)
     cursor = read_cursor(priors)
     if cursor is None:
         return ["NOCURSOR"]
-    if cursor == head_sha(repo):
+    if cursor == ref_sha(repo, ref):
         return []
-    return [f"STALE {r['key']} {r['asserted']} {r['depends_on']}" for r in parse_file(priors)]
+    return [f"STALE {r['key']} {r['asserted']} {r['depends_on']}" for r in records]
 
 
-def advance(repo: Path, priors: Path) -> str:
-    """Set the file's ``code-cursor`` to the repo's HEAD; returns the sha.
+def advance(repo: Path, priors: Path, ref: str | None = None) -> str:
+    """Set the file's ``code-cursor`` to the cursor ref's sha; returns it.
 
     An existing cursor line is replaced in place. Otherwise the line goes
     directly under a leading ``## `` heading (inside the section, so a split
@@ -231,7 +258,8 @@ def advance(repo: Path, priors: Path) -> str:
     """
     if not priors.is_file():
         raise PriorsError(f"no such priors file: {priors}")
-    sha = head_sha(repo)
+    parse_file(priors)  # a malformed record is refused, never stamped as validated
+    sha = ref_sha(repo, ref)
     cursor = f"<!-- code-cursor: {sha} -->"
     text = priors.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -259,10 +287,12 @@ def main(argv: list[str] | None = None) -> int:
     parse_cmd = commands.add_parser("parse", help="print prior records as JSON lines")
     parse_cmd.add_argument("file", type=Path)
     for name, text in (("stale", "list priors whose repo moved past the cursor"),
-                       ("advance", "set code-cursor to the repo's HEAD")):
+                       ("advance", "set code-cursor to the repo's mainline")):
         cmd = commands.add_parser(name, help=text)
         cmd.add_argument("--repo", type=Path, required=True)
         cmd.add_argument("--priors", type=Path, required=True)
+        cmd.add_argument("--ref", help="cursor ref (default: origin/HEAD, "
+                                       "the repo's mainline)")
     args = parser.parse_args(argv)
 
     try:
@@ -272,10 +302,10 @@ def main(argv: list[str] | None = None) -> int:
             for record in parse_file(args.file):
                 print(json.dumps(record, ensure_ascii=False))
         elif args.command == "stale":
-            for line in stale_lines(args.repo, args.priors):
+            for line in stale_lines(args.repo, args.priors, args.ref):
                 print(line)
         else:
-            print(f"code-cursor: {advance(args.repo, args.priors)}")
+            print(f"code-cursor: {advance(args.repo, args.priors, args.ref)}")
     except PriorsError as exc:
         print(f"priors_check: {exc}", file=sys.stderr)
         return 2

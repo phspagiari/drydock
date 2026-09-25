@@ -74,9 +74,13 @@ running loop, so fix it here first.
 
    **Then flag the priors this repo has moved past** — on either path
    above, once its checks have passed. The repo's cold priors file may
-   carry a `code-cursor:` line, the commit its priors were last validated
-   against. After the same `fetch`, run the checker over that file and
-   write its output into the item's directory:
+   carry a `code-cursor:` line, the mainline commit its priors were last
+   validated against. The cursor ref is the repo's mainline,
+   `origin/<default>`, which the checker resolves through
+   `refs/remotes/origin/HEAD` — never the primary checkout's `HEAD`, which
+   is whatever branch the human has parked there. The checker does not
+   fetch; after the same `fetch`, run it over that file and write its
+   output into the item's directory:
 
    ```sh
    python3 <PLUGIN_HOME>/board/priors_check.py stale --repo <target_repo> \
@@ -87,14 +91,17 @@ running loop, so fix it here first.
    `<slug>` is step 8's. The item is still in `inbox/` here; step 6's move
    carries `PRIORS-STALE.md` to `<STATE_HOME>/specs/active/<id>/`, which is
    where the 8a and 8c executors read it. Write it on every dispatch, so it
-   always describes this one: empty means `HEAD` is the cursor, `NOCURSOR`
-   means no cursor is recorded (a repo with no cold file yet reads the same
-   way), and one `STALE <key> <asserted> <depends_on>` line per prior in the
-   file means the repo has moved since they were validated. This flags and
-   never deletes — a stale prior still loads — and only the retro and
-   `priors_check.py advance` ever write the cursor. A non-zero exit (two
-   cursor lines, a malformed record, a repo `git` cannot read) escalates by
-   step 2's route like any other preflight miss.
+   always describes this one: empty means `origin/<default>` is the cursor,
+   `NOCURSOR` means no cursor is recorded (a repo with no cold file yet
+   reads the same way), and one `STALE <key> <asserted> <depends_on>` line
+   per prior in the file means mainline has moved since they were
+   validated. This flags and never deletes — a stale prior still loads —
+   and only the retro and `priors_check.py advance` ever write the cursor.
+   The file is parsed before the cursor is compared, so a non-zero exit
+   does not depend on whether the repo moved: two cursor lines, a malformed
+   record, a repo `git` cannot read, or an unset `origin/HEAD` (the message
+   names the fix, `git remote set-head origin -a`) escalates by step 2's
+   route like any other preflight miss.
 
 ## Execute
 
@@ -170,9 +177,9 @@ running loop, so fix it here first.
    do not implement it. Read `<STATE_HOME>/PRIORS.md` (lessons from prior
    runs), `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific
    to this target repo), `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md`
-   (the priors the repo has moved past — stale priors are still advice;
-   weigh them knowing the repo has moved), the spec, and the repo in this
-   worktree. Write
+   if it exists (the priors the repo has moved past — stale priors are
+   still advice; weigh them knowing the repo has moved), the spec, and the
+   repo in this worktree. Write
    `<STATE_HOME>/specs/active/<id>/PLAN.md` from
    `<PLUGIN_HOME>/templates/plan-template.md` — `## Tasks` is mandatory —
    as your LAST act, or to a temporary name renamed into place: its
@@ -204,9 +211,9 @@ running loop, so fix it here first.
    Prompt: *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md` by the plan
    in `<STATE_HOME>/specs/active/<id>/PLAN.md`. Read exactly these: the
    spec, PLAN.md, `<STATE_HOME>/PRIORS.md`, `<STATE_HOME>/priors/<slug>.md`
-   if it exists, `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md` — stale
-   priors are still advice; weigh them knowing the repo has moved — and
-   `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
+   if it exists, `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md` if it
+   exists — stale priors are still advice; weigh them knowing the repo has
+   moved — and `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
    they govern how you verify, get ready, and escalate. The plan session's
    transcript is not available to you and must not be reconstructed:
    PLAN.md is the whole handoff, and what it does not say you read from the

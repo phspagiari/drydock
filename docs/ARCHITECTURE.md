@@ -316,7 +316,8 @@ A prior the retro writes is a **record**, not a bare bullet: a
 `depends_on` (a falsifiable fact, with the paths it rests on backticked as
 globs) and `asserted`. Older bullets stay legal and read as
 `depends_on: unknown`. Each repo's cold file may carry a `code-cursor:`
-line, the repo commit its priors were last validated against — drydock's
+line, the mainline (`origin/<default>`) commit its priors were last
+validated against, never the human checkout's `HEAD` — drydock's
 third cursor, beside the retro's `retro-cursor` and a deliverable's
 `comments_seen:`. Dispatch preflight (DISPATCH step 5) runs
 `plugin/board/priors_check.py stale` against it and writes the item's
