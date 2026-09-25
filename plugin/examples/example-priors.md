@@ -67,21 +67,40 @@ working any other repo never sees it. The `## Target repo:` heading stays at
 the top — it is what the splitter recognises, and keeping it makes a re-split
 a no-op.
 
+The entries below show the two shapes a prior can have, side by side. The
+first is a **record**, the format the retro writes from now on: a
+`[<slug>/<key>]` handle, then `scope`, `derived_from`, `depends_on` and
+`asserted` sub-bullets. `depends_on` is the load-bearing one — a falsifiable
+fact about the repo, with the paths it rests on backticked, since
+`board/priors_check.py` reads any backticked token containing `*`, `?`, `/`
+or `.` as a path glob. The ones after it are **legacy** bullets, which stay
+legal and parse as `depends_on: unknown` — never auto-invalidated. The
+`code-cursor` line under the heading is the commit these priors were last
+validated against: dispatch preflight lists every prior in the file as stale
+once the repo's `HEAD` differs from it, and only the retro advances it.
+
 ```markdown
 ## Target repo: ~/code/ledger-api
 
-- **Lint results depend on where the local default-branch ref points, not on
-  the branch under test.** The linter config set
-  `issues.new-from-merge-base: main`, and the linter resolved the *literal
-  local* ref — not `origin/main`. In a worktree whose parent checkout had
-  `main` 171 commits behind, a bare lint run reported other people's merged
-  debt as this branch's findings: 9 phantom findings, all pre-existing.
-  Before treating any lint output as a finding about the branch, prove the
-  precondition — `git rev-list --count main..origin/main` → `0`. Note that
-  `git fetch origin main:main` is refused while the parent checkout has
-  `main` checked out; fast-forward it there instead.
+<!-- code-cursor: 3f9c2e1a7b8d4c6e0f1a2b3c4d5e6f7a8b9c0d1e -->
+
+- **[ledger-api/lint-local-ref]** **Lint results depend on where the local
+  default-branch ref points, not on the branch under test.** The linter
+  config set `issues.new-from-merge-base: main`, and the linter resolved the
+  *literal local* ref — not `origin/main`. In a worktree whose parent
+  checkout had `main` 171 commits behind, a bare lint run reported other
+  people's merged debt as this branch's findings: 9 phantom findings, all
+  pre-existing. Before treating any lint output as a finding about the
+  branch, prove the precondition — `git rev-list --count main..origin/main`
+  → `0`. Note that `git fetch origin main:main` is refused while the parent
+  checkout has `main` checked out; fast-forward it there instead.
   *(2026-06-14-toolchain-repair, QUESTION run 2 — an entire escalation
   produced by a stale ref)*
+  - scope: `~/code/ledger-api`
+  - derived_from: `2026-06-14-toolchain-repair`
+  - depends_on: `.golangci.yaml` still sets new-from-merge-base to the
+    literal local `main` ref
+  - asserted: 2026-06-14
 
 - **A worktree that is clean by `git status` is not a *built* worktree.**
   Generated sources (protobuf output, in this repo) were gitignored, so they

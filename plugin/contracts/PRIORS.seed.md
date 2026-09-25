@@ -48,10 +48,22 @@ contracts.
   cold repo file it sits under that file's `## Target repo: <path>` heading,
   which is also what the splitter recognises:
 
-    - **One-sentence claim in bold.** The mechanism, concretely enough that
-      a fresh executor can act on it — including the command that proves or
-      disproves it today. Say what would make the prior obsolete.
+    - **[<slug>/<key>]** **One-sentence claim in bold.** The mechanism,
+      concretely enough that a fresh executor can act on it — including the
+      command that proves or disproves it today.
       *(<item-id>, <artifact that taught it>)*
+      - scope: <target repo path, or global>
+      - derived_from: <item-id>
+      - depends_on: <what would make the prior obsolete, as a checkable
+        fact; backtick the paths it rests on, e.g. `.git/worktrees/**`>
+      - asserted: <YYYY-MM-DD>
+
+  `<slug>` is the repo's cold-file slug, or `global` in this hot file. A
+  bullet without the four sub-bullets is a legacy prior: still legal, read
+  as `depends_on: unknown`. A cold repo file may also carry one
+  `<!-- code-cursor: <full sha> -->` line under its heading, the repo commit
+  its priors were last validated against; `board/priors_check.py` reads it,
+  and only `/drydock:retro` advances it.
 
   See `examples/example-priors.md` for worked entries from real runs.
 

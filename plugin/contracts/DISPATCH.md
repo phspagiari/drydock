@@ -72,6 +72,30 @@ running loop, so fix it here first.
    instead is not a fallback — it is the outcome the declaration exists to
    prevent.
 
+   **Then flag the priors this repo has moved past** — on either path
+   above, once its checks have passed. The repo's cold priors file may
+   carry a `code-cursor:` line, the commit its priors were last validated
+   against. After the same `fetch`, run the checker over that file and
+   write its output into the item's directory:
+
+   ```sh
+   python3 <PLUGIN_HOME>/board/priors_check.py stale --repo <target_repo> \
+     --priors <STATE_HOME>/priors/<slug>.md \
+     > <STATE_HOME>/specs/inbox/<id>/PRIORS-STALE.md
+   ```
+
+   `<slug>` is step 8's. The item is still in `inbox/` here; step 6's move
+   carries `PRIORS-STALE.md` to `<STATE_HOME>/specs/active/<id>/`, which is
+   where the 8a and 8c executors read it. Write it on every dispatch, so it
+   always describes this one: empty means `HEAD` is the cursor, `NOCURSOR`
+   means no cursor is recorded (a repo with no cold file yet reads the same
+   way), and one `STALE <key> <asserted> <depends_on>` line per prior in the
+   file means the repo has moved since they were validated. This flags and
+   never deletes — a stale prior still loads — and only the retro and
+   `priors_check.py advance` ever write the cursor. A non-zero exit (two
+   cursor lines, a malformed record, a repo `git` cannot read) escalates by
+   step 2's route like any other preflight miss.
+
 ## Execute
 
 6. Move `<STATE_HOME>/specs/inbox/<id>/` → `<STATE_HOME>/specs/active/<id>/`;
@@ -145,7 +169,10 @@ running loop, so fix it here first.
    **8a — Plan.** Prompt: *"Plan `<STATE_HOME>/specs/active/<id>/SPEC.md`;
    do not implement it. Read `<STATE_HOME>/PRIORS.md` (lessons from prior
    runs), `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific
-   to this target repo), the spec, and the repo in this worktree. Write
+   to this target repo), `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md`
+   (the priors the repo has moved past — stale priors are still advice;
+   weigh them knowing the repo has moved), the spec, and the repo in this
+   worktree. Write
    `<STATE_HOME>/specs/active/<id>/PLAN.md` from
    `<PLUGIN_HOME>/templates/plan-template.md` — `## Tasks` is mandatory —
    as your LAST act, or to a temporary name renamed into place: its
@@ -177,7 +204,9 @@ running loop, so fix it here first.
    Prompt: *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md` by the plan
    in `<STATE_HOME>/specs/active/<id>/PLAN.md`. Read exactly these: the
    spec, PLAN.md, `<STATE_HOME>/PRIORS.md`, `<STATE_HOME>/priors/<slug>.md`
-   if it exists, and `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
+   if it exists, `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md` — stale
+   priors are still advice; weigh them knowing the repo has moved — and
+   `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
    they govern how you verify, get ready, and escalate. The plan session's
    transcript is not available to you and must not be reconstructed:
    PLAN.md is the whole handoff, and what it does not say you read from the
@@ -213,7 +242,9 @@ running loop, so fix it here first.
    Substitute the real slug into the prompt; a repo with no cold file yet is
    the ordinary case, not a fault.
    An executor — plan, implement or single-phase — loads the hot file and
-   its repo's cold file and **nothing else** — `_spec-writing.md` is
+   its repo's cold file and **no other priors file** (the plan and implement
+   executors also read that cold file's stale list, `PRIORS-STALE.md` from
+   step 5; the single-phase prompt predates it) — `_spec-writing.md` is
    `/drydock:spec`'s, `_review.md` is the diff reviewer's, and
    `_pr-prose.md` arrives at step 11 and not before. The plan gate (8b)
    loads the same two an executor does: `_review.md` is lore about diffs,

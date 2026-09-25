@@ -81,6 +81,58 @@ description: Self-improvement pass over drydock's own history — mine unblock d
   feels while you are writing it. A STATE_HOME with no `priors/` directory
   is a pre-split one: append to `PRIORS.md` as before and let
   `/drydock:install` migrate it.
+
+  **Every new prior is a record, not a bare bullet** — a bold
+  `[<slug>/<key>]` handle (`<slug>` is the repo's cold-file slug, or
+  `global`; `<key>` a short name unique in its file), the statement, and all
+  four sub-bullets, in this order:
+
+  ```markdown
+  - **[ledger-api/fetch-refused]** `git fetch origin main:main` is refused
+    while the primary checkout has `main` checked out.
+    - scope: `~/code/ledger-api`
+    - derived_from: `2026-06-14-toolchain-repair`
+    - depends_on: the primary checkout keeps `main` checked out;
+      `.git/HEAD`, `.git/worktrees/**`
+    - asserted: 2026-06-14
+  ```
+
+  - `scope:` — the target repo's path, or `global`. It must agree with the
+    file the table above sends the prior to.
+  - `derived_from:` — the citing item id; the citation rule below still
+    applies.
+  - `depends_on:` — a **falsifiable fact**: what would have to change for
+    the prior to stop being true, stated so an agent reading the repo can
+    check it. Where a path is the dependency, backtick it as a glob
+    relative to the repo root — `board/priors_check.py` reads any
+    backticked token containing `*`, `?`, `/` or `.` as one. `unknown` is
+    legal and means "never auto-invalidated"; use it only when you
+    genuinely cannot name the dependency.
+  - `asserted:` — the ISO date you wrote it.
+
+  A bullet with none of the four is a legacy prior. It stays legal and
+  parses as `depends_on: unknown`; do not backfill old priors in passing.
+
+  **Promotion.** If the same lesson — the same statement and the same
+  `depends_on:` — is asserted under two different repo files
+  (`priors/<slug>.md`, not the phase files), it is not about either repo.
+  Move it to the hot `PRIORS.md` with `scope: global` and a `global/`
+  handle, cite both `derived_from:` ids on that one line, and delete both
+  cold copies in the same commit. Two is the threshold. The hot file's
+  size cap still applies to what promotion brings in.
+
+  **The code cursor.** A repo's cold file may carry one
+  `<!-- code-cursor: <full sha> -->` line directly under its
+  `## Target repo:` heading — the commit its priors were last validated
+  against. Dispatch preflight (DISPATCH step 5) compares it to the repo and
+  flags the priors the repo has moved past; nothing deletes them. Only you
+  move it, and only after re-validating. Run `python3
+  <PLUGIN_HOME>/board/priors_check.py stale --repo <path> --priors
+  <STATE_HOME>/priors/<slug>.md` now rather than trusting an item's
+  `PRIORS-STALE.md` (the repo may have moved again since), re-read every
+  `STALE` entry against the repo, and confirm or prune each. Then, and only
+  then, `priors_check.py advance` with the same arguments. A retro that did
+  not re-validate a repo leaves its cursor where it was.
 - **Rule** (process failure a prior can't fix): draft the amendment to
   `<PLUGIN_HOME>/contracts/DISPATCH.md` / `REVIEWER.md` / `ORCHESTRATOR.md` /
   `<PLUGIN_HOME>/templates/spec-template.md`, show the diff and the incident
