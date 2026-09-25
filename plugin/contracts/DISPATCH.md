@@ -72,6 +72,37 @@ running loop, so fix it here first.
    instead is not a fallback — it is the outcome the declaration exists to
    prevent.
 
+   **Then flag the priors this repo has moved past** — on either path
+   above, once its checks have passed. The repo's cold priors file may
+   carry a `code-cursor:` line, the mainline commit its priors were last
+   validated against. The cursor ref is the repo's mainline,
+   `origin/<default>`, which the checker resolves through
+   `refs/remotes/origin/HEAD` — never the primary checkout's `HEAD`, which
+   is whatever branch the human has parked there. The checker does not
+   fetch; after the same `fetch`, run it over that file and write its
+   output into the item's directory:
+
+   ```sh
+   python3 <PLUGIN_HOME>/board/priors_check.py stale --repo <target_repo> \
+     --priors <STATE_HOME>/priors/<slug>.md \
+     > <STATE_HOME>/specs/inbox/<id>/PRIORS-STALE.md
+   ```
+
+   `<slug>` is step 8's. The item is still in `inbox/` here; step 6's move
+   carries `PRIORS-STALE.md` to `<STATE_HOME>/specs/active/<id>/`, which is
+   where the 8a and 8c executors read it. Write it on every dispatch, so it
+   always describes this one: empty means `origin/<default>` is the cursor,
+   `NOCURSOR` means no cursor is recorded (a repo with no cold file yet
+   reads the same way), and one `STALE <key> <asserted> <depends_on>` line
+   per prior in the file means mainline has moved since they were
+   validated. This flags and never deletes — a stale prior still loads —
+   and only the retro and `priors_check.py advance` ever write the cursor.
+   The file is parsed before the cursor is compared, so a non-zero exit
+   does not depend on whether the repo moved: two cursor lines, a malformed
+   record, a repo `git` cannot read, or an unset `origin/HEAD` (the message
+   names the fix, `git remote set-head origin -a`) escalates by step 2's
+   route like any other preflight miss.
+
 ## Execute
 
 6. Move `<STATE_HOME>/specs/inbox/<id>/` → `<STATE_HOME>/specs/active/<id>/`;
@@ -103,8 +134,102 @@ running loop, so fix it here first.
    **Repo-agnostic rule:** the target repo carries zero drydock metadata —
    no labels, tags, or spec files committed there. Branch + PR are the only
    footprint; `<STATE_HOME>` is the sole registry of which PRs are ours.
-8. Start a fresh Claude session in the worktree with the prompt:
-   *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md`. First read
+8. Start the executor — for an item dispatched since the plan phase
+   existed, three phases in sequence, each a **fresh** Claude session in the
+   worktree, with an artifact as the only handoff between them: a plan
+   executor writes `PLAN.md` and exits (8a), a gate approves or flags it
+   (8b), and an implement executor that never saw the plan session builds
+   it (8c). The research that produced a plan is noise to the
+   implementation; the plan is the signal, and the reset is the point.
+
+   **The phase marker.** RUN.md's header is the `key: value` lines before
+   the first `##` heading of any kind, and the dispatcher's new-item write
+   emits `base_sha:`, `phase: plan` and the `## Log` heading in the same
+   single write (write-then-rename), never as a second edit. The header
+   carries a `phase:` line: `phase: plan` from 8a on, `phase: implement`
+   from 8c on. It is the only thing that tells the phases apart. RUN.md's
+   *existence* cannot: step 7 writes RUN.md for every item before this
+   step runs. Read `phase:` as one `key: value` line of the header,
+   whatever other fields sit beside it and in whatever order; a `phase:`
+   under any `##` heading is not the marker. Setting it replaces that one
+   line and leaves every other header line alone.
+
+   **Which prompt a dispatch launches** — decided by RUN.md as it stood
+   when this dispatch began:
+
+   - **No RUN.md** — a new item. Step 7's RUN.md write is that single
+     write: `base_sha:` together with `phase: plan`, then the `## Log`
+     heading, written to a temporary name and renamed into place — so no
+     RUN.md ever exists without its `phase:` line or its boundary. Then
+     launch 8a.
+   - **An old-shape in-flight item: RUN.md with no `phase:` line** —
+     dispatched before this change, re-queued after an unblock. It finishes
+     under the single-phase prompt below, to completion, unblocks included;
+     it never gets a plan phase or a gate.
+   - **`phase: implement`** — launch 8c; it resumes per step 10.
+   - **`phase: plan`** — rename a `flag`ged `PLAN-REVIEW.md` to
+     `PLAN-REVIEW-r<N>.md` (N = 1 + those already there). Then `PLAN.md`
+     absent → launch 8a; present → launch nothing: the unblock amended it,
+     and the orchestrator's next tick gates it again (8b). An unblock that
+     wants a fresh plan deletes `PLAN.md`.
+
+   **8a — Plan.** Prompt: *"Plan `<STATE_HOME>/specs/active/<id>/SPEC.md`;
+   do not implement it. Read `<STATE_HOME>/PRIORS.md` (lessons from prior
+   runs), `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific
+   to this target repo), `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md`
+   if it exists (the priors the repo has moved past — stale priors are
+   still advice; weigh them knowing the repo has moved), the spec, and the
+   repo in this worktree. Write
+   `<STATE_HOME>/specs/active/<id>/PLAN.md` from
+   `<PLUGIN_HOME>/templates/plan-template.md` — `## Tasks` is mandatory —
+   as your LAST act, or to a temporary name renamed into place: its
+   presence tells the orchestrator you are done. Do not modify the
+   worktree: no edits, no commits, no branch changes. Log to
+   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go. If anything needs
+   the human's call, escalate per `<PLUGIN_HOME>/contracts/DISPATCH.md`
+   step 10 instead of finishing the plan — with no worktree changes there
+   is nothing to push: leave RUN.md a handoff, move the item to
+   `<STATE_HOME>/specs/blocked/<id>/`, and as your LAST act write
+   QUESTION.md there. Do NOT write PLAN.md on this path — not first, not
+   last, not at all. Then exit."* So an 8a session ends in exactly one of
+   two ways: `PLAN.md` written last and nothing else, or QUESTION.md
+   written last and no `PLAN.md`. A marker the plan session left in
+   `PLAN.md` anyway is the gate's to catch (8b), and it flags the item.
+
+   **8b — Gate.** Run by the orchestrator, not by the dispatch: an item
+   with `phase: plan`, a `PLAN.md` and no `PLAN-REVIEW.md` gets a reviewer
+   session per `<PLUGIN_HOME>/contracts/REVIEWER.md`, *Plan gate*, which
+   writes `PLAN-REVIEW.md` with `verdict: approve` or `flag`. **flag** →
+   `<STATE_HOME>/specs/blocked/<id>/` with the findings as the question,
+   by step 10's route. **approve** → 8c. The gate is the reviewer agent by
+   default; the human sees a plan only when it is flagged. A manual
+   `/drydock:dispatch` launches 8a and returns — 8b and 8c need an
+   orchestrator tick.
+
+   **8c — Implement.** The orchestrator rewrites the `phase:` line to
+   `phase: implement`, then starts a fresh session in the worktree.
+   Prompt: *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md` by the plan
+   in `<STATE_HOME>/specs/active/<id>/PLAN.md`. Read exactly these: the
+   spec, PLAN.md, `<STATE_HOME>/PRIORS.md`, `<STATE_HOME>/priors/<slug>.md`
+   if it exists, `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md` if it
+   exists — stale priors are still advice; weigh them knowing the repo has
+   moved — and `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
+   they govern how you verify, get ready, and escalate. The plan session's
+   transcript is not available to you and must not be reconstructed:
+   PLAN.md is the whole handoff, and what it does not say you read from the
+   repo or escalate. Work `## Tasks` in `After`-order: run each row's
+   `Verify`, save its output under
+   `<STATE_HOME>/specs/active/<id>/evidence/`, and tick the row in RUN.md —
+   a log line `- [x] T<n> — <output path>` — before starting the next.
+   If RUN.md already ticks rows, you are resuming: start from the first
+   unticked row (step 10). You do NOT open a PR — ever.
+   Follow the spec exactly: respect Non-goals and blast radius, stop on any
+   escalation condition and write QUESTION.md instead of guessing. Log to
+   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go."*
+
+   **Single-phase (old-shape in-flight items only).** Prompt, unchanged
+   from before the plan phase existed: *"Execute
+   `<STATE_HOME>/specs/active/<id>/SPEC.md`. First read
    `<STATE_HOME>/PRIORS.md` (lessons from prior runs) and
    `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific to this
    target repo), then `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 — they
@@ -123,9 +248,14 @@ running loop, so fix it here first.
    `_review.md`) that belong to one phase rather than to one repo.
    Substitute the real slug into the prompt; a repo with no cold file yet is
    the ordinary case, not a fault.
-   An executor loads the hot file and its repo's cold file and **nothing
-   else** — `_spec-writing.md` is `/drydock:spec`'s, `_review.md` is the
-   reviewer's, and `_pr-prose.md` arrives at step 11 and not before. A
+   An executor — plan, implement or single-phase — loads the hot file and
+   its repo's cold file and **no other priors file** (the plan and implement
+   executors also read that cold file's stale list, `PRIORS-STALE.md` from
+   step 5; the single-phase prompt predates it) — `_spec-writing.md` is
+   `/drydock:spec`'s, `_review.md` is the diff reviewer's, and
+   `_pr-prose.md` arrives at step 11 and not before. The plan gate (8b)
+   loads the same two an executor does: `_review.md` is lore about diffs,
+   and a plan has none. A
    STATE_HOME still holding one monolithic `PRIORS.md` is a pre-split one:
    it loads whole and correctly, and `/drydock:install` migrates it.
 9. Executor runs all acceptance criteria itself, saving raw output under
@@ -154,6 +284,13 @@ running loop, so fix it here first.
     design: after an unblock, a FRESH executor continues from the amended
     spec + branch + RUN.md, never the old session. Unpushed work in a pruned
     worktree is lost work.
+    In the implement phase (`phase: implement`, step 8c) that fresh
+    executor resumes from the **first unticked task** in RUN.md. If the
+    unblock amended `PLAN.md`, it re-reads the plan first and reconciles
+    the ticked rows against the new `## Tasks` — a ticked row the new plan
+    dropped or changed is re-verified, not trusted — before continuing.
+    An old-shape in-flight item (RUN.md with no `phase:` line) has no task
+    list: it resumes from RUN.md's handoff, exactly as before.
 11. **All clean** → read `<STATE_HOME>/priors/_pr-prose.md` if it exists —
     the phase file for exactly this step, and the one place the loop has
     recorded what prepared PR bodies keep getting wrong — then write

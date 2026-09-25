@@ -57,6 +57,21 @@ and never judges a deliverable — it moves state, dispatches, and verifies. Bot
 of the jobs it refuses are jobs where being wrong is expensive, and both are
 handled by an actor with a contract of its own.
 
+The executor row is three sessions, not one, for anything dispatched since the
+plan phase landed. A **plan** executor reads the spec, the priors and the repo,
+writes `PLAN.md` — an approach, the files it will touch, and a mandatory
+`## Tasks` table whose every row carries a runnable `Verify` — and exits
+without touching the worktree. A **gate**, the reviewer agent by default and
+the human only when it flags, checks the plan against the spec. Then an
+**implement** executor starts cold from the spec and the plan alone, works the
+tasks in order and ticks each in `RUN.md`, and carries on from DISPATCH step 9
+as before. The plan session's transcript never reaches it: the research is the
+noise, the plan is the signal, and reviewing a plan costs minutes where
+reviewing a wrong diff costs an hour. A `phase:` line in `RUN.md`'s header
+tells the orchestrator which phase an item is in. The prompts live in
+[`DISPATCH.md`](../plugin/contracts/DISPATCH.md) step 8, the state table in
+[`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md).
+
 ## Lifecycle
 
 ```mermaid
@@ -295,3 +310,18 @@ the incremental-view-maintenance framing the layout came out of, are in
 the split has one monolithic file and keeps working — `/drydock:install` runs
 `plugin/board/split_priors.py` over it once, splitting on the `## Target
 repo:` and topic headings such a file has already grown on its own.
+
+A prior the retro writes is a **record**, not a bare bullet: a
+`[<slug>/<key>]` handle and four sub-bullets — `scope`, `derived_from`,
+`depends_on` (a falsifiable fact, with the paths it rests on backticked as
+globs) and `asserted`. Older bullets stay legal and read as
+`depends_on: unknown`. Each repo's cold file may carry a `code-cursor:`
+line, the mainline (`origin/<default>`) commit its priors were last
+validated against, never the human checkout's `HEAD` — drydock's
+third cursor, beside the retro's `retro-cursor` and a deliverable's
+`comments_seen:`. Dispatch preflight (DISPATCH step 5) runs
+`plugin/board/priors_check.py stale` against it and writes the item's
+`PRIORS-STALE.md`, which the plan and implement executors read as a caveat
+on the priors: stale means the repo has moved, not that the prior is wrong,
+so nothing is deleted. Only the retro advances the cursor, after it has
+re-validated or pruned each flagged prior.
