@@ -62,6 +62,33 @@ latest version always wins.
    state: queue directories first (disk is truth), then RUN.md mtime, then
    session liveness via the ListAgents tool / `claude agents`. Never narrate
    a status you didn't verify.
+   - **Phase** (DISPATCH step 8) — read the `phase:` line of RUN.md's
+     header (the `key: value` lines above `## Log`; other fields may sit
+     beside it) and derive the item's state from disk, first match wins:
+
+     | State | Test | Action |
+     |---|---|---|
+     | old-shape in-flight | RUN.md has no `phase:` line | single-phase rules |
+     | plan running | `phase: plan`, `PLAN.md` absent | verify progress as today |
+     | awaiting gate | `phase: plan`, `PLAN.md` present, `PLAN-REVIEW.md` absent | run the gate (8b) |
+     | ready to implement | `phase: plan`, `PLAN-REVIEW.md` `verdict: approve` | set `phase: implement`, start 8c |
+     | plan flagged | `phase: plan`, `PLAN-REVIEW.md` `verdict: flag` | to `blocked/`, findings as the question |
+     | implementing | `phase: implement` | verify progress as today |
+
+     An old-shape in-flight item — RUN.md with no `phase:` line — was
+     dispatched before the plan phase existed: it runs to completion under
+     the single-phase rules, and is never stalled for lacking a `PLAN.md`
+     and never gated. Neither "awaiting gate" nor "ready to implement" is
+     stalled either: no executor is meant to be running, and the next step
+     is yours. **Run the gate**: unless a gate session for the item is
+     already live, `cd <STATE_HOME> && claude --bg --model <review model>
+     --permission-mode <permission-mode> "Plan gate for
+     <STATE_HOME>/specs/active/<id> (worktree <path>) per
+     <PLUGIN_HOME>/contracts/REVIEWER.md, Plan gate."` — it writes
+     `PLAN-REVIEW.md`. **Start 8c**: rewrite the header's `phase: plan`
+     line to `phase: implement` (that line only), then launch DISPATCH's 8c
+     prompt from the worktree the way Inbox launches an executor. **Plan
+     flagged**: move, commit, notify as for any block below.
    - Executor wrote `READY.md` (zero-calls gate passed, no PR exists) and
      no current-round `REVIEW.md` → dispatch the adversarial reviewer on
      the WORKTREE: `cd <STATE_HOME> && claude --bg --model <review model>
@@ -92,8 +119,12 @@ latest version always wins.
      `claude "/drydock:spec unblock <id>"` (same for specs blocked at
      preflight).
    - Executor died without moving state (no agent, stale RUN.md) → ONE
-     relaunch from the same spec; a second death → move to `blocked/` with
-     QUESTION.md describing the failure, notify ("dispatch failure: <id>").
+     relaunch from the same spec, with the prompt of the phase RUN.md names:
+     8a for `phase: plan`, 8c for `phase: implement`, the single-phase
+     prompt for an old-shape item with no `phase:` line. A gate session that
+     died without writing `PLAN-REVIEW.md` is the same case. A second death
+     → move to `blocked/` with QUESTION.md describing the failure, notify
+     ("dispatch failure: <id>").
    - `max_wall_clock` exceeded → stop the agent, move to `blocked/`,
      notify ("budget exceeded: <id>").
 3. **Housekeeping** — sweep `<STATE_HOME>/deliverables/*/DELIVERABLE.md`

@@ -99,3 +99,57 @@ citation discipline as everyone else.
   Nothing else. You never open a PR.
 - Every standing rule your environment enforces applies to you — including
   read-only restrictions on live infrastructure.
+
+## Plan gate — DISPATCH step 8b
+
+A second, lighter pass, and a separate session from the diff review above:
+nothing in the sections above applies to it, and nothing here changes them.
+The orchestrator runs it when a plan-phase item has a `PLAN.md` and no
+`PLAN-REVIEW.md` (ORCHESTRATOR.md, Active). No code exists yet. You are
+judging whether `<STATE_HOME>/specs/active/<id>/PLAN.md` is a plan a fresh
+implement executor can follow to the spec's goal without the plan session's
+transcript — which it will not have.
+
+Read `SPEC.md`, `PLAN.md`, the hot `<STATE_HOME>/PRIORS.md` and
+`<STATE_HOME>/priors/<slug>.md`, and the worktree **read-only**. Not
+`priors/_review.md`: that is lore about diffs, and there is no diff. Every
+check below, at minimum; a failed check is a finding:
+
+- **Coverage** — every FR in the spec maps to at least one `## Tasks` row.
+  Name any FR no row serves.
+- **Verify is runnable** — every row's `Verify` is a command that runs from
+  the worktree (the tool exists, the path exists or a row before it creates
+  it), and would fail if the row were not done. "Inspect", "review" or a
+  prose description is not a command.
+- **Radius** — `## Files`, and each row's `Files`, ⊆ the spec's *may touch*;
+  nothing on its *must not touch* list.
+- **Non-goals** — no row builds something the spec's Non-goals exclude.
+- **Order** — every `After` names an existing row, and the rows form no
+  cycle.
+- **Markers** — no unresolved clarification marker anywhere in `PLAN.md`.
+  (The plan executor escalates on its own marker; this catches the one it
+  missed.)
+
+Write `<STATE_HOME>/specs/active/<id>/PLAN-REVIEW.md` as your **last act**,
+or to a temporary name renamed into place — the orchestrator reads its
+presence as "the gate is done", so a partial one must never be visible:
+
+```yaml
+verdict: approve | flag
+findings: <count>
+```
+
+Body: one line per check above with its result, then each finding as
+*claim → evidence (PLAN.md or SPEC.md line, command output) → what the plan
+must change*.
+
+- **approve** — every check passed. The orchestrator sets `phase:
+  implement` and starts the implement executor (DISPATCH step 8c).
+- **flag** — anything failed. The item goes to `blocked/` with your findings
+  as the question; the human amends the plan or the spec. There is no fix
+  round for a plan: an unreviewed re-plan is exactly what the gate exists
+  to prevent.
+
+You never edit `PLAN.md`, `SPEC.md` or the worktree; `PLAN-REVIEW.md` is the
+only file you write. The default gate is you — the human sees a plan only
+when you flag it.
