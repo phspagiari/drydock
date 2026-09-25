@@ -111,20 +111,26 @@ running loop, so fix it here first.
    it (8c). The research that produced a plan is noise to the
    implementation; the plan is the signal, and the reset is the point.
 
-   **The phase marker.** RUN.md's header — the `key: value` lines above
-   `## Log`, where step 7 records `base_sha:` — carries a `phase:` line:
-   `phase: plan` from 8a on, `phase: implement` from 8c on. It is the only
-   thing that tells the phases apart. RUN.md's *existence* cannot: step 7
-   writes RUN.md for every item before this step runs. Read `phase:` as one
-   `key: value` line of the header, whatever other fields sit beside it and
-   in whatever order; a `phase:` inside the log is not the marker. Setting
-   it replaces that one line and leaves every other header line alone.
+   **The phase marker.** RUN.md's header is the `key: value` lines before
+   the first `##` heading of any kind, and the dispatcher's new-item write
+   emits `base_sha:`, `phase: plan` and the `## Log` heading in the same
+   single write (write-then-rename), never as a second edit. The header
+   carries a `phase:` line: `phase: plan` from 8a on, `phase: implement`
+   from 8c on. It is the only thing that tells the phases apart. RUN.md's
+   *existence* cannot: step 7 writes RUN.md for every item before this
+   step runs. Read `phase:` as one `key: value` line of the header,
+   whatever other fields sit beside it and in whatever order; a `phase:`
+   under any `##` heading is not the marker. Setting it replaces that one
+   line and leaves every other header line alone.
 
    **Which prompt a dispatch launches** — decided by RUN.md as it stood
    when this dispatch began:
 
-   - **No RUN.md** — a new item. Add `phase: plan` to the header step 7
-     writes, before the session starts, then launch 8a.
+   - **No RUN.md** — a new item. Step 7's RUN.md write is that single
+     write: `base_sha:` together with `phase: plan`, then the `## Log`
+     heading, written to a temporary name and renamed into place — so no
+     RUN.md ever exists without its `phase:` line or its boundary. Then
+     launch 8a.
    - **An old-shape in-flight item: RUN.md with no `phase:` line** —
      dispatched before this change, re-queued after an unblock. It finishes
      under the single-phase prompt below, to completion, unblocks included;
@@ -145,12 +151,16 @@ running loop, so fix it here first.
    as your LAST act, or to a temporary name renamed into place: its
    presence tells the orchestrator you are done. Do not modify the
    worktree: no edits, no commits, no branch changes. Log to
-   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go. Anything that needs
-   the human's call is a clarification marker in `## Risks`, and then you
-   escalate per `<PLUGIN_HOME>/contracts/DISPATCH.md` step 10: QUESTION.md,
-   item to blocked/ — with no worktree changes, there is nothing to push.
-   Then exit."* A marker in `PLAN.md` blocks the item exactly as a spec
-   marker does at step 2.
+   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go. If anything needs
+   the human's call, escalate per `<PLUGIN_HOME>/contracts/DISPATCH.md`
+   step 10 instead of finishing the plan — with no worktree changes there
+   is nothing to push: leave RUN.md a handoff, move the item to
+   `<STATE_HOME>/specs/blocked/<id>/`, and as your LAST act write
+   QUESTION.md there. Do NOT write PLAN.md on this path — not first, not
+   last, not at all. Then exit."* So an 8a session ends in exactly one of
+   two ways: `PLAN.md` written last and nothing else, or QUESTION.md
+   written last and no `PLAN.md`. A marker the plan session left in
+   `PLAN.md` anyway is the gate's to catch (8b), and it flags the item.
 
    **8b — Gate.** Run by the orchestrator, not by the dispatch: an item
    with `phase: plan`, a `PLAN.md` and no `PLAN-REVIEW.md` gets a reviewer

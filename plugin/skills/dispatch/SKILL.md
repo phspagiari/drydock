@@ -42,8 +42,8 @@ skill only adds argument handling on top.
    table, permission mode from `<STATE_HOME>/config`, both in
    `<PLUGIN_HOME>/contracts/ORCHESTRATOR.md`. DISPATCH step 8 picks the
    prompt from RUN.md as it stood before this dispatch: for a new item that
-   is the plan phase (8a), with `phase: plan` added to RUN.md's header
-   first.
+   is the plan phase (8a), with `phase: plan` written into RUN.md's header
+   in the same single write as `base_sha:`.
    The gate (8b) and the implement phase (8c) are driven by the
    orchestrator's ticks, not by this skill — without an orchestrator
    running, a manually dispatched item stops at `PLAN.md`.

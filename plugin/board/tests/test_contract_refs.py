@@ -101,11 +101,22 @@ class ContractRefsTest(unittest.TestCase):
         self.assertIn(("ORCHESTRATOR.md", "DISPATCH steps 16–17"), found)
         self.assertGreater(len(found), 20)
 
-    def test_dispatch_steps_are_numbered_without_gaps(self):
-        # Sub-steps are bold labels inside a step, never numbered items.
+    def test_dispatch_step_set_is_pinned(self):
+        # Pinned exactly, not "no gaps": inserting a step and shifting the
+        # rest keeps every citation resolving -- to the wrong step. Adding a
+        # step 18 means editing this line on purpose, and re-checking every
+        # citation of the steps after it.
         have = steps((PLUGIN / "contracts/DISPATCH.md").read_text())
-        self.assertEqual(have, set(range(1, max(have) + 1)))
-        self.assertGreaterEqual(max(have), 17)
+        self.assertEqual(have, set(range(1, 18)))
+
+    def test_dispatch_sub_steps_are_inline_labels(self):
+        # 8a/8b/8c are bold labels inside step 8, each exactly once, and never
+        # promoted to headings -- a heading would reshape step 8 without any
+        # citation noticing.
+        text = (PLUGIN / "contracts/DISPATCH.md").read_text()
+        for label in ("**8a — ", "**8b — ", "**8c — "):
+            self.assertEqual(text.count(label), 1, label)
+        self.assertEqual(re.findall(r"^#+\s*8[a-z].*$", text, re.M), [])
 
 
 class DanglingFixtureTest(unittest.TestCase):

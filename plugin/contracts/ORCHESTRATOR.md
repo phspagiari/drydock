@@ -62,8 +62,11 @@ latest version always wins.
    state: queue directories first (disk is truth), then RUN.md mtime, then
    session liveness via the ListAgents tool / `claude agents`. Never narrate
    a status you didn't verify.
-   - **Phase** (DISPATCH step 8) — read the `phase:` line of RUN.md's
-     header (the `key: value` lines above `## Log`; other fields may sit
+   - **Phase** (DISPATCH step 8) — RUN.md's header is the `key: value`
+     lines before the first `##` heading of any kind, and the dispatcher's
+     new-item write emits `base_sha:`, `phase: plan` and the `## Log`
+     heading in the same single write (write-then-rename), never as a
+     second edit. Read the header's `phase:` line (other fields may sit
      beside it) and derive the item's state from disk, first match wins:
 
      | State | Test | Action |
@@ -74,6 +77,7 @@ latest version always wins.
      | ready to implement | `phase: plan`, `PLAN-REVIEW.md` `verdict: approve` | set `phase: implement`, start 8c |
      | plan flagged | `phase: plan`, `PLAN-REVIEW.md` `verdict: flag` | to `blocked/`, findings as the question |
      | implementing | `phase: implement` | verify progress as today |
+     | anything else | no row above matches — e.g. a `phase:` value other than `plan`/`implement`, or a `PLAN-REVIEW.md` verdict other than `approve`/`flag` | to `blocked/`, QUESTION.md naming the unrecognised `phase:` / verdict value |
 
      An old-shape in-flight item — RUN.md with no `phase:` line — was
      dispatched before the plan phase existed: it runs to completion under
@@ -81,14 +85,18 @@ latest version always wins.
      and never gated. Neither "awaiting gate" nor "ready to implement" is
      stalled either: no executor is meant to be running, and the next step
      is yours. **Run the gate**: unless a gate session for the item is
-     already live, `cd <STATE_HOME> && claude --bg --model <review model>
+     already live (one that ran and died is the dead-gate case below),
+     `cd <STATE_HOME> && claude --bg --model <review model>
      --permission-mode <permission-mode> "Plan gate for
      <STATE_HOME>/specs/active/<id> (worktree <path>) per
      <PLUGIN_HOME>/contracts/REVIEWER.md, Plan gate."` — it writes
      `PLAN-REVIEW.md`. **Start 8c**: rewrite the header's `phase: plan`
      line to `phase: implement` (that line only), then launch DISPATCH's 8c
      prompt from the worktree the way Inbox launches an executor. **Plan
-     flagged**: move, commit, notify as for any block below.
+     flagged** and **anything else**: move, commit, notify as for any
+     block below. The last row fails closed, as preflight does: a new
+     `phase:` value is a deliberate edit to this table, never something an
+     orchestrator guesses its way through.
    - Executor wrote `READY.md` (zero-calls gate passed, no PR exists) and
      no current-round `REVIEW.md` → dispatch the adversarial reviewer on
      the WORKTREE: `cd <STATE_HOME> && claude --bg --model <review model>
@@ -118,12 +126,18 @@ latest version always wins.
      include the ready-to-paste command to work it:
      `claude "/drydock:spec unblock <id>"` (same for specs blocked at
      preflight).
-   - Executor died without moving state (no agent, stale RUN.md) → ONE
-     relaunch from the same spec, with the prompt of the phase RUN.md names:
-     8a for `phase: plan`, 8c for `phase: implement`, the single-phase
-     prompt for an old-shape item with no `phase:` line. A gate session that
-     died without writing `PLAN-REVIEW.md` is the same case. A second death
-     → move to `blocked/` with QUESTION.md describing the failure, notify
+   - Executor died without moving state (no agent, stale RUN.md) — this
+     applies only in the Phase states where an executor is meant to be
+     running: **plan running**, **implementing** and **old-shape
+     in-flight**. In *awaiting gate* and *ready to implement* no agent and
+     a stale RUN.md are the normal condition, not a death. → ONE relaunch
+     from the same spec, with that state's prompt: 8a for plan running, 8c
+     for implementing, the single-phase prompt for old-shape. A **dead
+     gate** — a gate session launched for the item that is no longer live
+     and left no `PLAN-REVIEW.md` — is relaunched with the *Plan gate*
+     prompt above, never 8a (8a would overwrite the plan under review),
+     under the same one-relaunch cap. A second death of either kind → move
+     to `blocked/` with QUESTION.md describing the failure, notify
      ("dispatch failure: <id>").
    - `max_wall_clock` exceeded → stop the agent, move to `blocked/`,
      notify ("budget exceeded: <id>").
