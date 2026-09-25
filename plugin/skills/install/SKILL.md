@@ -68,7 +68,8 @@ under you; this one line-per-setting file is yours alone; `git commit` it in
 ## 3. Seed the queue
 
 Create, if missing: `<STATE_HOME>/specs/{inbox,active,blocked}/`,
-`<STATE_HOME>/deliverables/`, `<STATE_HOME>/archive/` — all empty.
+`<STATE_HOME>/deliverables/`, `<STATE_HOME>/archive/`,
+`<STATE_HOME>/priors/` — all empty.
 
 Copy the seeds once, only if the destination doesn't already exist:
 `<PLUGIN_HOME>/contracts/PRIORS.seed.md` → `<STATE_HOME>/PRIORS.md`,
@@ -78,6 +79,58 @@ again, which is the point: a prior about someone else's build system was the
 old failure mode, and now nothing can silently reintroduce it.
 
 Commit: `install: seed state home` (in `<STATE_HOME>`, never pushed).
+
+### Split an existing monolithic `PRIORS.md`
+
+Priors are stored hot (`<STATE_HOME>/PRIORS.md`, global, loaded by everyone)
+plus cold (`<STATE_HOME>/priors/*.md`, loaded per repo and per phase) — see
+`<PLUGIN_HOME>/contracts/DISPATCH.md` step 8. Installs that predate that
+layout have one file carrying everything, and **migrating it is install's
+job**: the live file is state, so nothing else in the system is allowed to
+rewrite it.
+
+Run this only when `<STATE_HOME>/PRIORS.md` exists **and** contains at least
+one `## Target repo:` heading:
+
+```bash
+grep -qiE '^##\s+[Tt]arget\s+[Rr]epo\s*:' <STATE_HOME>/PRIORS.md
+```
+
+That expression mirrors `TARGET_REPO_RE` in `board/split_priors.py`, which
+is the authority on what counts as a repo heading: case-insensitive, and
+tolerant of repeated whitespace and of a space before the colon. A gate
+*narrower* than the classifier is the dangerous direction — it skips a
+migration the splitter would have performed, and that file keeps its repo
+sections forever. Wider is harmless: the splitter writes nothing at all
+when it finds no cold section. Nothing to do when the gate does not fire —
+a fresh seed and an already-split file both carry no repo heading.
+
+```bash
+python3 <PLUGIN_HOME>/board/split_priors.py \
+  <STATE_HOME>/PRIORS.md <STATE_HOME>
+```
+
+It rewrites the hot file in place and writes the cold files beside it; the
+section headings the file already grew on their own are what it splits on, so
+no prior is rewritten and none is lost (it conserves the non-blank line
+count). Show them the file list it prints, then commit
+`install: split priors into hot/cold` (in `<STATE_HOME>`, never pushed).
+
+A non-zero exit is either a heading it refuses to guess a bucket for (one
+message on stderr) or a filesystem failure. Either way, show what it printed
+and stop — do not hand-file the sections instead. The hot `PRIORS.md` is
+rewritten **last**, after every cold file has landed, so a run that fails
+leaves it holding every line it held before. What such a run can leave is a
+half-written `<STATE_HOME>/priors/`, and the splitter *appends* to an
+existing cold file — retrying over one would file those priors twice. Clear
+it first; nothing under `priors/` is committed yet, so its untracked entries
+are exactly what the failed run wrote:
+
+```bash
+git -C <STATE_HOME> status --short priors/   # what it managed to write
+git -C <STATE_HOME> clean -f priors/         # drop that before retrying
+git -C <STATE_HOME> checkout -- PRIORS.md    # only if it died mid-write
+```
 
 ## 4. Migrating from the old clone+symlink install
 
@@ -96,7 +149,10 @@ at `<old-clone>/plugin`. Ask if this applies to them. If so:
    sed-replaced to inside `<old-clone>/contracts/DISPATCH.md`, and write it
    into `<STATE_HOME>/config`.
 4. Commit the import into `<STATE_HOME>` (never pushed):
-   `install: import queue from <old-clone>`.
+   `install: import queue from <old-clone>`. The imported `PRIORS.md`
+   replaces whatever step 3 left, so **re-run step 3's split condition
+   against it now** — an old clone's priors are exactly the monolithic shape
+   that migration exists for, and step 3 ran before they were here.
 5. Remove the symlink at `~/.claude/skills/drydock` — it is superseded by
    the marketplace install. Tell them `<old-clone>` itself is now just a
    normal git clone; they can delete it, or keep it only if they intend to

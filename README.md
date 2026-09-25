@@ -175,7 +175,7 @@ tick of a loop that is already running.
 | [`ORCHESTRATOR.md`](plugin/contracts/ORCHESTRATOR.md) | The tick: inbox dispatch, active verification, housekeeping, notification policy | The orchestrator session | Every tick |
 | [`DISPATCH.md`](plugin/contracts/DISPATCH.md) | One spec from inbox to landed deliverable — preflight, worktree, the zero-calls gate, ship, comment rounds. Steps 1–17 | Orchestrator, `/drydock:dispatch`, and executors (steps 9–11) | Any tick that dispatches or lands work |
 | [`REVIEWER.md`](plugin/contracts/REVIEWER.md) | The adversarial pass: what to hunt for, the `ship`/`fix`/`flag` verdict, the round cap | The reviewer session | When an executor writes `READY.md` |
-| `PRIORS.md` (in STATE_HOME) | Accumulated lessons — advisory knowledge, not policy. Seeded empty from [`PRIORS.seed.md`](plugin/contracts/PRIORS.seed.md) at install | Every executor before work, every reviewer while grounding | Start of every run |
+| `PRIORS.md` + `priors/*.md` (in STATE_HOME) | Accumulated lessons — advisory knowledge, not policy. Seeded empty from [`PRIORS.seed.md`](plugin/contracts/PRIORS.seed.md) at install. Hot file global; cold files loaded per target repo and per phase ([design note](docs/design/2026-09-18-ivm-priors.md)) | Every executor before work, every reviewer while grounding, `/drydock:spec` and the retro | Start of every run |
 | `PROPOSALS.md` (in STATE_HOME) | Rule changes a retro wants, with evidence and a suggested diff. Applied only by a human | `/drydock:retro`, `/drydock:review` | A per-item retro queues; the review pass decides |
 
 ### The commands
