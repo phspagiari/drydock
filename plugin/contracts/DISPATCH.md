@@ -103,8 +103,87 @@ running loop, so fix it here first.
    **Repo-agnostic rule:** the target repo carries zero drydock metadata —
    no labels, tags, or spec files committed there. Branch + PR are the only
    footprint; `<STATE_HOME>` is the sole registry of which PRs are ours.
-8. Start a fresh Claude session in the worktree with the prompt:
-   *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md`. First read
+8. Start the executor — for an item dispatched since the plan phase
+   existed, three phases in sequence, each a **fresh** Claude session in the
+   worktree, with an artifact as the only handoff between them: a plan
+   executor writes `PLAN.md` and exits (8a), a gate approves or flags it
+   (8b), and an implement executor that never saw the plan session builds
+   it (8c). The research that produced a plan is noise to the
+   implementation; the plan is the signal, and the reset is the point.
+
+   **The phase marker.** RUN.md's header — the `key: value` lines above
+   `## Log`, where step 7 records `base_sha:` — carries a `phase:` line:
+   `phase: plan` from 8a on, `phase: implement` from 8c on. It is the only
+   thing that tells the phases apart. RUN.md's *existence* cannot: step 7
+   writes RUN.md for every item before this step runs. Read `phase:` as one
+   `key: value` line of the header, whatever other fields sit beside it and
+   in whatever order; a `phase:` inside the log is not the marker. Setting
+   it replaces that one line and leaves every other header line alone.
+
+   **Which prompt a dispatch launches** — decided by RUN.md as it stood
+   when this dispatch began:
+
+   - **No RUN.md** — a new item. Add `phase: plan` to the header step 7
+     writes, before the session starts, then launch 8a.
+   - **An old-shape in-flight item: RUN.md with no `phase:` line** —
+     dispatched before this change, re-queued after an unblock. It finishes
+     under the single-phase prompt below, to completion, unblocks included;
+     it never gets a plan phase or a gate.
+   - **`phase: implement`** — launch 8c; it resumes per step 10.
+   - **`phase: plan`** — rename a `flag`ged `PLAN-REVIEW.md` to
+     `PLAN-REVIEW-r<N>.md` (N = 1 + those already there). Then `PLAN.md`
+     absent → launch 8a; present → launch nothing: the unblock amended it,
+     and the orchestrator's next tick gates it again (8b). An unblock that
+     wants a fresh plan deletes `PLAN.md`.
+
+   **8a — Plan.** Prompt: *"Plan `<STATE_HOME>/specs/active/<id>/SPEC.md`;
+   do not implement it. Read `<STATE_HOME>/PRIORS.md` (lessons from prior
+   runs), `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific
+   to this target repo), the spec, and the repo in this worktree. Write
+   `<STATE_HOME>/specs/active/<id>/PLAN.md` from
+   `<PLUGIN_HOME>/templates/plan-template.md` — `## Tasks` is mandatory —
+   as your LAST act, or to a temporary name renamed into place: its
+   presence tells the orchestrator you are done. Do not modify the
+   worktree: no edits, no commits, no branch changes. Log to
+   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go. Anything that needs
+   the human's call is a clarification marker in `## Risks`, and then you
+   escalate per `<PLUGIN_HOME>/contracts/DISPATCH.md` step 10: QUESTION.md,
+   item to blocked/ — with no worktree changes, there is nothing to push.
+   Then exit."* A marker in `PLAN.md` blocks the item exactly as a spec
+   marker does at step 2.
+
+   **8b — Gate.** Run by the orchestrator, not by the dispatch: an item
+   with `phase: plan`, a `PLAN.md` and no `PLAN-REVIEW.md` gets a reviewer
+   session per `<PLUGIN_HOME>/contracts/REVIEWER.md`, *Plan gate*, which
+   writes `PLAN-REVIEW.md` with `verdict: approve` or `flag`. **flag** →
+   `<STATE_HOME>/specs/blocked/<id>/` with the findings as the question,
+   by step 10's route. **approve** → 8c. The gate is the reviewer agent by
+   default; the human sees a plan only when it is flagged. A manual
+   `/drydock:dispatch` launches 8a and returns — 8b and 8c need an
+   orchestrator tick.
+
+   **8c — Implement.** The orchestrator rewrites the `phase:` line to
+   `phase: implement`, then starts a fresh session in the worktree.
+   Prompt: *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md` by the plan
+   in `<STATE_HOME>/specs/active/<id>/PLAN.md`. Read exactly these: the
+   spec, PLAN.md, `<STATE_HOME>/PRIORS.md`, `<STATE_HOME>/priors/<slug>.md`
+   if it exists, and `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
+   they govern how you verify, get ready, and escalate. The plan session's
+   transcript is not available to you and must not be reconstructed:
+   PLAN.md is the whole handoff, and what it does not say you read from the
+   repo or escalate. Work `## Tasks` in `After`-order: run each row's
+   `Verify`, save its output under
+   `<STATE_HOME>/specs/active/<id>/evidence/`, and tick the row in RUN.md —
+   a log line `- [x] T<n> — <output path>` — before starting the next.
+   If RUN.md already ticks rows, you are resuming: start from the first
+   unticked row (step 10). You do NOT open a PR — ever.
+   Follow the spec exactly: respect Non-goals and blast radius, stop on any
+   escalation condition and write QUESTION.md instead of guessing. Log to
+   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go."*
+
+   **Single-phase (old-shape in-flight items only).** Prompt, unchanged
+   from before the plan phase existed: *"Execute
+   `<STATE_HOME>/specs/active/<id>/SPEC.md`. First read
    `<STATE_HOME>/PRIORS.md` (lessons from prior runs) and
    `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific to this
    target repo), then `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 — they
@@ -123,9 +202,12 @@ running loop, so fix it here first.
    `_review.md`) that belong to one phase rather than to one repo.
    Substitute the real slug into the prompt; a repo with no cold file yet is
    the ordinary case, not a fault.
-   An executor loads the hot file and its repo's cold file and **nothing
-   else** — `_spec-writing.md` is `/drydock:spec`'s, `_review.md` is the
-   reviewer's, and `_pr-prose.md` arrives at step 11 and not before. A
+   An executor — plan, implement or single-phase — loads the hot file and
+   its repo's cold file and **nothing else** — `_spec-writing.md` is
+   `/drydock:spec`'s, `_review.md` is the diff reviewer's, and
+   `_pr-prose.md` arrives at step 11 and not before. The plan gate (8b)
+   loads the same two an executor does: `_review.md` is lore about diffs,
+   and a plan has none. A
    STATE_HOME still holding one monolithic `PRIORS.md` is a pre-split one:
    it loads whole and correctly, and `/drydock:install` migrates it.
 9. Executor runs all acceptance criteria itself, saving raw output under
@@ -154,6 +236,13 @@ running loop, so fix it here first.
     design: after an unblock, a FRESH executor continues from the amended
     spec + branch + RUN.md, never the old session. Unpushed work in a pruned
     worktree is lost work.
+    In the implement phase (`phase: implement`, step 8c) that fresh
+    executor resumes from the **first unticked task** in RUN.md. If the
+    unblock amended `PLAN.md`, it re-reads the plan first and reconciles
+    the ticked rows against the new `## Tasks` — a ticked row the new plan
+    dropped or changed is re-verified, not trusted — before continuing.
+    An old-shape in-flight item (RUN.md with no `phase:` line) has no task
+    list: it resumes from RUN.md's handoff, exactly as before.
 11. **All clean** → read `<STATE_HOME>/priors/_pr-prose.md` if it exists —
     the phase file for exactly this step, and the one place the loop has
     recorded what prepared PR bodies keep getting wrong — then write
