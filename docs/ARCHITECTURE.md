@@ -310,3 +310,17 @@ the incremental-view-maintenance framing the layout came out of, are in
 the split has one monolithic file and keeps working — `/drydock:install` runs
 `plugin/board/split_priors.py` over it once, splitting on the `## Target
 repo:` and topic headings such a file has already grown on its own.
+
+A prior the retro writes is a **record**, not a bare bullet: a
+`[<slug>/<key>]` handle and four sub-bullets — `scope`, `derived_from`,
+`depends_on` (a falsifiable fact, with the paths it rests on backticked as
+globs) and `asserted`. Older bullets stay legal and read as
+`depends_on: unknown`. Each repo's cold file may carry a `code-cursor:`
+line, the repo commit its priors were last validated against — drydock's
+third cursor, beside the retro's `retro-cursor` and a deliverable's
+`comments_seen:`. Dispatch preflight (DISPATCH step 5) runs
+`plugin/board/priors_check.py stale` against it and writes the item's
+`PRIORS-STALE.md`, which the plan and implement executors read as a caveat
+on the priors: stale means the repo has moved, not that the prior is wrong,
+so nothing is deleted. Only the retro advances the cursor, after it has
+re-validated or pruned each flagged prior.
