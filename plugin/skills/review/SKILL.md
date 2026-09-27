@@ -28,6 +28,16 @@ archived or delivered PRs still open with merge conflicts or unmerged for
 more than 5 days (check each recorded `pr_url` via `gh pr view --json
 state,mergeable,updatedAt`; never scan the target repo's PR list).
 
+**Then propagate, before walking anything.** The same check finds the
+merges: an archived item marked `propagate: on-merge` whose PR now reads
+`MERGED` becomes `propagate: pending`, and so does a delivered item this
+check archives (see Rules). Then, for every `target_repo` with an item in
+`<STATE_HOME>/archive/` marked `propagate: pending`, run the propagation
+procedure in `<PLUGIN_HOME>/contracts/DISPATCH.md` step 14 — one batch per
+repo, so chained items judge their shared merge once. Report each repo's
+`propagate:` commit line (or `skip:` / no priors file) in the opening, and
+stop to tell the human if a merge is not on the repo's mainline.
+
 ## Per blocked item
 
 Hand off to `/drydock:spec unblock <id>` (that skill owns the flow). After it
@@ -53,8 +63,11 @@ re-queues, offer immediate `/drydock:dispatch <id>`.
    - **Approve** → for `pr` deliverables: `gh pr ready <url>` (draft → ready
      for the team's normal review), then move `<STATE_HOME>/deliverables/<id>/`
      → `<STATE_HOME>/archive/<id>/`, commit `approve: <id>` (in `<STATE_HOME>`,
-     never pushed). For reports: publish per the spec's stated destination,
-     then archive.
+     never pushed). If the PR already reads `MERGED`, run the propagation in
+     `DISPATCH.md` step 14 for its repo now; if it is still open, write
+     `propagate: on-merge` into the archived `DELIVERABLE.md` in the same
+     commit. For reports: publish per the spec's stated destination, then
+     archive — reports never propagate.
    - **Reject** → require the routing, never accept a bare no:
      - *fast* (spec was wrong/incomplete): capture the reason in
        `REJECTION.md` (`loop: fast`), amend `SPEC.md` together now, move back
@@ -73,5 +86,6 @@ re-queues, offer immediate `/drydock:dispatch <id>`.
   an explicit per-item verdict, never inferred, never batched.
 - An unrouted rejection teaches the system nothing; refuse to archive one.
 - Merged PRs found during the stale-check → move their items to
-  `<STATE_HOME>/archive/` automatically and mention it (merge was the
-  approval's completion).
+  `<STATE_HOME>/archive/` automatically, marked `propagate: pending` when
+  they are `pr` deliverables, and mention it (merge was the approval's
+  completion).

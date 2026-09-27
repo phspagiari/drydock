@@ -258,7 +258,10 @@ latest version always wins.
    recorded `pr_url`s (`gh pr view --json state` — never scan the target
    repo's PR list): **merged** → move the item to `<STATE_HOME>/archive/`,
    commit `archive: <id> (merged)`; a merge is a completed approval, so this
-   is bookkeeping — tick-report it, no notification. **Closed without merge**
+   is bookkeeping — tick-report it, no notification. For a `pr` deliverable,
+   write `propagate: pending` into the archived `DELIVERABLE.md` in that same
+   commit — a marker only: `/drydock:review` runs the judgment (DISPATCH step
+   14), never the tick. **Closed without merge**
    → leave the item in place and note it in the tick report; that verdict
    belongs to the human's review pass. **Open PR with new human comments**
    (anything beyond DELIVERABLE.md's `comments_seen:` cursor; check reviews,

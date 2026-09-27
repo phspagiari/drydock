@@ -63,7 +63,9 @@ contracts.
   as `depends_on: unknown`. A cold repo file may also carry one
   `<!-- code-cursor: <full sha> -->` line under its heading, the repo commit
   its priors were last validated against; `board/priors_check.py` reads it,
-  and only `/drydock:retro` advances it.
+  and `/drydock:retro` and merge propagation (DISPATCH step 14) advance it.
+  Propagation may also leave a prior a `- stale: <merge sha>` sub-bullet,
+  which the retro clears once it re-validates or rewrites that prior.
 
   See `examples/example-priors.md` for worked entries from real runs.
 

@@ -415,6 +415,76 @@ running loop, so fix it here first.
 
 14. Approve → `gh pr ready <url>` (draft → ready for the team's normal
     review) or publish the report; move to `<STATE_HOME>/archive/<id>/`.
+
+    **Propagation — a landed diff re-checks the priors it touches.** It
+    runs only once a `pr` deliverable's pull request has *merged*: a merge
+    commit on mainline is landed, a draft or ready PR is not, so it never
+    runs at ship and never for a PR still open at approve. Items with
+    `deliverable: report` skip it — there is no landed diff — and nothing
+    marks them. What starts it:
+    - approve, when `gh pr view <url> --json state,mergeCommit` already
+      reads `MERGED`: run the procedure below now, for this item's repo;
+    - approve of a PR that is still open: write `propagate: on-merge` into
+      the archived `DELIVERABLE.md`; the review pass's opening PR check
+      rewrites it to `propagate: pending` once that PR reads `MERGED`;
+    - ORCHESTRATOR step 3, archiving a delivered item whose PR merged,
+      writes `propagate: pending` — a marker only, no judgment in the tick.
+
+    `/drydock:review` runs the procedure at the start of its pass for every
+    `target_repo` with an item marked `propagate: pending`, before it walks
+    anything else. Per repo:
+    1. **Batch.** Take every item in `<STATE_HOME>/archive/` for this
+       `target_repo` marked `propagate: pending`, plus the item being
+       approved if it qualified above. Resolve each `pr_url`'s
+       `mergeCommit.oid` and dedupe: chained items share one `pr_url`, so
+       they share one merge and one judgment. After `git -C <target_repo>
+       fetch origin`, every merge must be an ancestor of `origin/<default>`
+       — one that is not stops the procedure; tell the human what you saw
+       and never guess a range. `<merge>` is the newest of them.
+    2. **Range: `<cursor>..<merge>`**, where `<cursor>` is the repo's
+       `code-cursor`. With no cursor yet, use `<earliest merge>^1..<merge>`
+       and say so in the record. Not the PR's own `base..merge`: advancing
+       the cursor to `<merge>` claims every commit before it was checked.
+    3. **Pre-filter.** Write the range's file list and list the candidates:
+
+       ```sh
+       git -C <target_repo> diff --name-only <cursor>..<merge> > <list>
+       python3 <PLUGIN_HOME>/board/priors_check.py candidates \
+         --priors <STATE_HOME>/priors/<slug>.md --diff-files <list>
+       ```
+
+       A prior with no globs is always a candidate; the filter only narrows.
+    4. **Judge.** Start one agent with the candidate list, the range's diff
+       restricted to the candidates' matched files (the whole diff for a
+       candidate with no globs), and this instruction: for each candidate
+       return one verdict — `holds`, `stale` or `retract` — and the hunk,
+       file and line range, that decided it. A verdict without its deciding
+       hunk is not a verdict; ask again.
+    5. **Record** the range, the merge shape (squash: one parent; merge
+       commit: two) and every verdict with its hunk in
+       `<STATE_HOME>/archive/<id>/PROPAGATION.md` of the item with the
+       newest merge. Set that item's marker and every other batched item's
+       to `propagate: done <merge sha> (see archive/<id>/PROPAGATION.md)`.
+    6. **Apply** all of the file's verdicts in **one** `priors_check.py
+       retract --priors <file>` call — legacy keys are positional, so a
+       second call can hit the wrong prior. `holds` changes nothing;
+       `stale` is `--sha <merge> --mark <key>`, which adds a `stale:`
+       sub-bullet; `retract` is the bare key, which removes the prior. Then
+       `priors_check.py advance --if-ancestor --repo <target_repo> --priors
+       <file> --ref <merge>`; a `skip:` line leaves the cursor to the retro
+       — note it in the record. Commit once in `<STATE_HOME>`:
+       `propagate: <slug> <merge sha> — <n> holds, <m> stale, <k>
+       retracted`, its body one line per removal: `retract <key>: <why, one
+       line> (see archive/<id>/PROPAGATION.md)`.
+
+    **Propagation writes `<STATE_HOME>` only** — `priors/<slug>.md`, the
+    archive, their commit. The target repo's own `CLAUDE.md`, its README
+    and every other file in it are out of bounds, even when a prior there
+    has gone stale: drydock-derived state never lands in a pushable tree,
+    the line PR #3 drew when it split `PLUGIN_HOME` from `STATE_HOME`. A
+    repo with no `priors/<slug>.md` (a pre-split STATE_HOME) has nothing to
+    judge: skip the range, judgment and apply, and still set every batched
+    marker to `propagate: done <merge sha> (no priors file)`.
 15. Reject → write `REJECTION.md` with the reason and its loop:
     `fast` (amend spec → inbox) or `slow` (fold the correction into the
     executing skill → re-queue).
