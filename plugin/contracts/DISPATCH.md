@@ -441,10 +441,22 @@ running loop, so fix it here first.
        fetch origin`, every merge must be an ancestor of `origin/<default>`
        — one that is not stops the procedure; tell the human what you saw
        and never guess a range. `<merge>` is the newest of them.
-    2. **Range: `<cursor>..<merge>`**, where `<cursor>` is the repo's
-       `code-cursor`. With no cursor yet, use `<earliest merge>^1..<merge>`
-       and say so in the record. Not the PR's own `base..merge`: advancing
-       the cursor to `<merge>` claims every commit before it was checked.
+    2. **Place `<merge>` against the cursor before any range exists.**
+       `<cursor>` is the repo's `code-cursor`; a retro may already have
+       advanced it past `<merge>`, and `git diff <cursor>..<merge>` would
+       then show later commits inverted and omit the merge itself. So:
+       - `git -C <target_repo> merge-base --is-ancestor <merge> <cursor>`
+         (tried first, so an equal cursor counts): the cursor already
+         covers the merge. Skip items 3–5 and go to item 6 with no
+         verdicts.
+       - `git -C <target_repo> merge-base --is-ancestor <cursor> <merge>`:
+         the range is `<cursor>..<merge>`. Not the PR's own `base..merge`:
+         advancing the cursor to `<merge>` claims every commit before it
+         was checked.
+       - No cursor yet: the range is `<earliest merge>^1..<merge>`; say so
+         in the record.
+       - Neither is an ancestor of the other (the cursor is on a side
+         line): stop, tell the human what you saw, never guess a range.
     3. **Pre-filter.** Write the range's file list and list the candidates:
 
        ```sh
@@ -460,22 +472,29 @@ running loop, so fix it here first.
        return one verdict — `holds`, `stale` or `retract` — and the hunk,
        file and line range, that decided it. A verdict without its deciding
        hunk is not a verdict; ask again.
-    5. **Record** the range, the merge shape (squash: one parent; merge
-       commit: two) and every verdict with its hunk in
-       `<STATE_HOME>/archive/<id>/PROPAGATION.md` of the item with the
-       newest merge. Set that item's marker and every other batched item's
-       to `propagate: done <merge sha> (see archive/<id>/PROPAGATION.md)`.
-    6. **Apply** all of the file's verdicts in **one** `priors_check.py
+    5. **Apply** all of the file's verdicts in **one** `priors_check.py
        retract --priors <file>` call — legacy keys are positional, so a
        second call can hit the wrong prior. `holds` changes nothing;
        `stale` is `--sha <merge> --mark <key>`, which adds a `stale:`
        sub-bullet; `retract` is the bare key, which removes the prior. Then
        `priors_check.py advance --if-ancestor --repo <target_repo> --priors
        <file> --ref <merge>`; a `skip:` line leaves the cursor to the retro
-       — note it in the record. Commit once in `<STATE_HOME>`:
-       `propagate: <slug> <merge sha> — <n> holds, <m> stale, <k>
-       retracted`, its body one line per removal: `retract <key>: <why, one
-       line> (see archive/<id>/PROPAGATION.md)`.
+       — note it in the record. A refused `retract` (exit 2: an unknown,
+       duplicate or shared key) writes nothing: leave every marker
+       `pending`, commit nothing, and report the refusal to the human.
+    6. **Record and commit**, only once item 5 succeeded or was skipped.
+       Write the range, the merge shape (squash: one parent; merge commit:
+       two) and every verdict with its hunk to
+       `<STATE_HOME>/archive/<id>/PROPAGATION.md` of the item with the
+       newest merge. Set that item's marker and every other batched item's
+       to `propagate: done <merge sha> (see archive/<id>/PROPAGATION.md)`.
+       Commit once in `<STATE_HOME>`: `propagate: <slug> <merge sha> — <n>
+       holds, <m> stale, <k> retracted`, its body one line per removal:
+       `retract <key>: <why, one line> (see archive/<id>/PROPAGATION.md)`.
+       When item 2 found the merge covered, write no PROPAGATION.md: set
+       the markers to `propagate: done <merge sha> (covered by code-cursor
+       <cursor>)` and commit `propagate: <slug> <merge sha> — covered by
+       code-cursor <cursor>`.
 
     **Propagation writes `<STATE_HOME>` only** — `priors/<slug>.md`, the
     archive, their commit. The target repo's own `CLAUDE.md`, its README
@@ -483,8 +502,9 @@ running loop, so fix it here first.
     has gone stale: drydock-derived state never lands in a pushable tree,
     the line PR #3 drew when it split `PLUGIN_HOME` from `STATE_HOME`. A
     repo with no `priors/<slug>.md` (a pre-split STATE_HOME) has nothing to
-    judge: skip the range, judgment and apply, and still set every batched
-    marker to `propagate: done <merge sha> (no priors file)`.
+    judge: skip items 2–5, set every batched marker to `propagate: done
+    <merge sha> (no priors file)` and commit that alone as
+    `propagate: <slug> <merge sha> — no priors file`.
 15. Reject → write `REJECTION.md` with the reason and its loop:
     `fast` (amend spec → inbox) or `slow` (fold the correction into the
     executing skill → re-queue).

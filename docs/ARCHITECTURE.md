@@ -335,12 +335,17 @@ housekeeping for a delivered item, the review pass's PR check for one
 already approved — marks the item `propagate: pending`, and
 `/drydock:review` does the work at the start of its pass, batching one
 repo's pending items so chained items that share a PR are judged once.
-It lists the files in `<cursor>..<merge>`, pre-filters the repo's priors
-by their `depends_on` globs (a prior with no globs always goes through),
-and has an agent judge each candidate against the diff: `holds`, `stale`
-(the prior gains a `stale:` sub-bullet, which the retro clears) or
-`retract` (removed, with the reason in the `<STATE_HOME>` commit). The
-cursor then advances to the merge only if the old cursor is its
-ancestor. Everything it writes is in `<STATE_HOME>`; a target repo's own
+It first places the merge against the cursor: a merge the cursor has
+already passed (a retro advanced it) is covered by the cursor and closes
+without a judgment, and a cursor on a side line stops for the human,
+since `<cursor>..<merge>` would then be a reversed or two-tree diff.
+Otherwise it lists the files in `<cursor>..<merge>`, pre-filters the
+repo's priors by their `depends_on` globs (a prior with no globs always
+goes through), and has an agent judge each candidate against the diff:
+`holds`, `stale` (the prior gains a `stale:` sub-bullet, which the retro
+clears) or `retract` (removed, with the reason in the `<STATE_HOME>`
+commit). The cursor then advances to the merge only if the old cursor is
+its ancestor, and the markers close only after the edit and the cursor
+move succeed. Everything it writes is in `<STATE_HOME>`; a target repo's own
 `CLAUDE.md` is deliberately out of reach, for the reason PR #3 split the
 plugin from the state.

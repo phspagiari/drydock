@@ -35,8 +35,10 @@ check archives (see Rules). Then, for every `target_repo` with an item in
 `<STATE_HOME>/archive/` marked `propagate: pending`, run the propagation
 procedure in `<PLUGIN_HOME>/contracts/DISPATCH.md` step 14 — one batch per
 repo, so chained items judge their shared merge once. Report each repo's
-`propagate:` commit line (or `skip:` / no priors file) in the opening, and
-stop to tell the human if a merge is not on the repo's mainline.
+`propagate:` commit line (judged, covered by the cursor, or no priors
+file, plus any `skip:`) in the opening. Stop and tell the human, with the
+markers left `pending`, if a merge is not on the repo's mainline, if the
+cursor and the merge have diverged, or if `retract` refused its keys.
 
 ## Per blocked item
 
