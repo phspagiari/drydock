@@ -26,6 +26,16 @@ reviewer, the plan gate, the retro and the orchestrator itself.
   or `PAGER=cat` wherever a pager can start. Assume `rm`, `cp` and `mv`
   are aliased to their `-i` forms whatever you typed: the alias is
   expanded before your flags are read.
+- **Before any move, rename or copy, assert the destination does not
+  exist**, file or directory, whether the verb is `mv`, `cp` or `git mv`.
+  `mv -f` and `cp -f` are the forms to write only once that assertion has
+  passed: `-f` suppresses the prompt, and the prompt was the only thing
+  protecting an existing destination. If it exists, stop and report it,
+  or escalate; never overwrite it. `mv -f` onto an existing file replaces
+  it and exits 0, and the post-state check below cannot tell, since the
+  source is absent and the destination present exactly as after a clean
+  rename. Under the alias, BSD `cp -f` onto an existing file still
+  prompts, as `-f` does not cancel `-i` there.
 - **Never pipe a long-running producer into a truncating consumer**
   (`| head`): the consumer exits and the producer blocks on the closed
   pipe. Redirect to a file, then read the file.
@@ -41,10 +51,14 @@ every change to it is committed, so the commit can be the readback.
 - Move or rename a tracked file or directory with `git mv`, and delete one
   with `git rm`. Remove an untracked file with `rm -f`, then assert it is
   absent.
-- **Before any `git mv` of a directory, assert the destination does not
-  exist.** `git mv` into an existing directory nests the source inside it
-  and exits 0. It fails loudly only onto an existing file, and a queue
-  move is a directory move.
+- Rename an untracked file, such as a review file just written and not
+  yet committed, with `mv -f`: `git mv` refuses an untracked source and
+  exits 128. Assert the destination absent first, then assert the source
+  absent and the destination present.
+- The destination assertion is not optional for `git mv` either. `git mv`
+  into an existing directory nests the source inside it and exits 0, and
+  a queue move is a directory move. It refuses an existing destination
+  only when that destination is a file.
 - Wherever a contract says to archive `X` as `Y`, that is a rename: `X`
   stops existing. A copy leaves a stale `X` that reads as current.
 - After committing, read the commit's own `--stat`

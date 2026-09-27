@@ -3,8 +3,10 @@
     python3 -m unittest discover board/tests
 
 The contract tells background sessions to write ``rm -f`` rather than trust
-``rm``, to use ``git rm`` / ``git mv`` in a git-tracked state directory, and
-to check that a directory ``git mv`` has no existing destination. Each of
+``rm``, to use ``git rm`` / ``git mv`` in a git-tracked state directory, to
+fall back to ``mv -f`` for an untracked source, and to check that no move or
+copy has an existing destination: ``mv -f`` overwrites one silently, and an
+aliased ``cp -f`` still prompts. Each of
 those rules is a claim about how the tools behave, and this module reproduces
 every claim in a scratch directory, so the day a tool changes, a test fails
 and the rule is revisited on purpose rather than silently going wrong.
@@ -93,6 +95,28 @@ class AliasPremisesTest(unittest.TestCase):
         if DARWIN:
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_mv_f_under_the_alias_overwrites_an_existing_destination(self):
+        # Why ``-f`` alone is unsafe: the prompt it suppresses was the only
+        # guard on the destination, and the post-state reads like a rename.
+        (self.dir / "src").write_text("source\n")
+        (self.dir / "dst").write_text("destination\n")
+        proc = sh(self.dir, "mv -f src dst")
+        self.assertEqual((self.dir / "dst").read_text(), "source\n", proc.stderr)
+        self.assertFalse((self.dir / "src").exists())
+        if DARWIN:
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_cp_f_under_the_alias_still_prompts_onto_an_existing_file(self):
+        # ``-f`` does not cancel ``-i`` for ``cp``: with no TTY the prompt
+        # reads EOF and the destination is left alone.
+        (self.dir / "src").write_text("source\n")
+        (self.dir / "dst").write_text("destination\n")
+        proc = sh(self.dir, "cp -f src dst")
+        self.assertEqual((self.dir / "dst").read_text(), "destination\n")
+        self.assertIn("overwrite", proc.stderr)
+        if DARWIN:
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+
     def test_rm_f_under_the_alias_removes_the_file(self):
         victim = self.dir / "victim"
         victim.write_text("gone\n")
@@ -130,10 +154,33 @@ class GitVerbPremisesTest(unittest.TestCase):
         if DARWIN:
             self.assertEqual(proc.returncode, 128, proc.stderr)
 
+    def test_git_mv_of_a_tracked_file_onto_an_untracked_file_fails(self):
+        # A re-run renaming a question onto the name an earlier run already
+        # used: git refuses, so nothing is lost.
+        (self.repo / "src").write_text("source\n")
+        commit_all(self.repo)
+        (self.repo / "dst").write_text("destination\n")
+        proc = sh(self.repo, "git mv src dst")
+        self.assertEqual((self.repo / "src").read_text(), "source\n")
+        self.assertEqual((self.repo / "dst").read_text(), "destination\n")
+        if DARWIN:
+            self.assertEqual(proc.returncode, 128, proc.stderr)
+
+    def test_git_mv_of_an_untracked_source_fails(self):
+        # Why the contract prescribes ``mv -f`` for an untracked rename.
+        (self.repo / "tracked").write_text("keeps HEAD valid\n")
+        commit_all(self.repo)
+        (self.repo / "src").write_text("source\n")
+        proc = sh(self.repo, "git mv src dst")
+        self.assertEqual((self.repo / "src").read_text(), "source\n")
+        self.assertFalse((self.repo / "dst").exists())
+        if DARWIN:
+            self.assertEqual(proc.returncode, 128, proc.stderr)
+
     def test_git_mv_of_a_directory_onto_an_existing_directory_nests(self):
-        # The case the contract's absent-destination check exists for. If a
-        # future git refuses this loudly, this test fails and the rule is
-        # revisited deliberately.
+        # Why the contract's absent-destination check covers ``git mv`` too:
+        # git's own refusal misses a directory. If a future git refuses this
+        # loudly, this test fails and the rule is revisited deliberately.
         (self.repo / "a/x").mkdir(parents=True)
         (self.repo / "a/x/SPEC.md").write_text("moving\n")
         (self.repo / "b/x").mkdir(parents=True)

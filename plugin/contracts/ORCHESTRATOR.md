@@ -342,8 +342,10 @@ unreviewed mutation against live infrastructure is not.
   dispatch. Every queue move, rename or delete that a tick report states
   was asserted on disk first. Once per tick, before acting on any item, run
   `python3 <PLUGIN_HOME>/board/server.py check --root <STATE_HOME>`. An
-  item it names is not acted on until its state is corrected, and the
-  tick report says so.
+  `active/` item it names moves to `blocked/` with the `check` line as its
+  question, appended under a `## Orchestrator —` heading if it already
+  holds a `QUESTION.md`, and is not otherwise acted on. An item it names
+  in any other state goes in the tick report and never gates the tick.
 - **Finished work is never destroyed.** An item in `active/` is finished
   when it holds `READY.md`, or a `QUESTION.md` that is open by the test in
   *Active*'s dispatch-failure bullet (the one beginning "Executor died
