@@ -62,6 +62,11 @@ def labelled_prompt(step: str, label: str) -> str:
     return found[0] if found else ""
 
 
+def bullets(section: str) -> list[str]:
+    """The section's top-level ``- `` list items, each whitespace-collapsed."""
+    return [collapse(b) for b in re.split(r"^- ", section, flags=re.M)[1:]]
+
+
 def read(name: str) -> str:
     return (CONTRACTS / name).read_text()
 
@@ -101,6 +106,24 @@ class EverySessionSectionTest(unittest.TestCase):
         self.assertIn("assert the destination does not exist", self.flat)
         self.assertIn("`git mv` into an existing directory nests the source "
                       "inside it and exits 0", self.flat)
+
+
+    def test_the_destination_assertion_covers_every_move_and_binds_f(self):
+        clause = "assert the destination does not exist"
+        sentences = [s for s in re.split(r"(?<=[.:])\s", self.flat) if clause in s]
+        self.assertTrue(sentences, "no destination assertion")
+        for sentence in sentences:
+            self.assertNotIn("of a directory", sentence)
+        bullet = [b for b in bullets(self.section) if clause in b]
+        self.assertEqual(len(bullet), 1)
+        for needle in ("`mv -f`", "`cp -f`", "`git mv`", "never overwrite"):
+            self.assertIn(needle, bullet[0], needle)
+
+    def test_an_untracked_rename_has_a_prescribed_path(self):
+        bullet = [b for b in bullets(self.section) if "untracked source" in b]
+        self.assertEqual(len(bullet), 1, "no untracked-rename bullet")
+        for needle in ("`mv -f`", "exits 128", "destination absent first"):
+            self.assertIn(needle, bullet[0], needle)
 
 
 class ExecutorPromptPointerTest(unittest.TestCase):
@@ -149,6 +172,12 @@ class OrchestratorHardLimitsTest(unittest.TestCase):
     def test_the_loop_is_a_session_and_runs_the_check(self):
         self.assertIn("`## Every session`", self.flat)
         self.assertIn("server.py check", self.flat)
+
+    def test_a_named_item_has_a_route_out(self):
+        bullet = [b for b in bullets(self.limits) if "server.py check" in b]
+        self.assertEqual(len(bullet), 1)
+        self.assertIn("`active/` item it names moves to `blocked/`", bullet[0])
+        self.assertIn("never gates the tick", bullet[0])
 
     def test_finished_work_is_enumerated_and_every_recovery_checks_it(self):
         for needle in ("`READY.md`", "`QUESTION.md`", "`## Orchestrator —`",
