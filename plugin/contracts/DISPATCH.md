@@ -482,6 +482,9 @@ running loop, so fix it here first.
        — note it in the record. A refused `retract` (exit 2: an unknown,
        duplicate or shared key) writes nothing: leave every marker
        `pending`, commit nothing, and report the refusal to the human.
+       When no verdict is `stale` or `retract` (all `holds`, or no
+       candidates), skip the `retract` call — it refuses an empty key
+       list — and run `advance` alone.
     6. **Record and commit**, only once item 5 succeeded or was skipped.
        Write the range, the merge shape (squash: one parent; merge commit:
        two) and every verdict with its hunk to
