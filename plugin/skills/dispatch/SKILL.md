@@ -26,7 +26,8 @@ skill only adds argument handling on top.
    get explicit go-ahead before adding a third (the orchestrator's
    concurrency cap applies to humans too).
 2. Run the `<PLUGIN_HOME>/contracts/DISPATCH.md` preflight, fail closed.
-   Unresolved `[NEEDS CLARIFICATION]` → `<STATE_HOME>/specs/blocked/<id>/` +
+   A `marker:` or `chain:` line from `queue_rules.py check` →
+   `<STATE_HOME>/specs/blocked/<id>/` +
    `QUESTION.md`, commit in `<STATE_HOME>` (never pushed), report — do not
    execute.
 3. Move to `<STATE_HOME>/specs/active/<id>/`, commit `dispatch: <id> -> active`.
