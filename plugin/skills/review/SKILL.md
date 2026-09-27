@@ -51,10 +51,13 @@ re-queues, offer immediate `/drydock:dispatch <id>`.
    it; executors never speak on the PR.
 3. Take the verdict:
    - **Approve** → for `pr` deliverables: `gh pr ready <url>` (draft → ready
-     for the team's normal review), then move `<STATE_HOME>/deliverables/<id>/`
-     → `<STATE_HOME>/archive/<id>/`, commit `approve: <id>` (in `<STATE_HOME>`,
-     never pushed). For reports: publish per the spec's stated destination,
-     then archive.
+     for the team's normal review) — **unless the pull request is shared**
+     (`DISPATCH.md` step 14: the item's spec declares a `pr_url`, or another
+     item's spec declares this item's `pr_url`); then it is left exactly as
+     it is, and marking it ready stays the human's own action. Then move
+     `<STATE_HOME>/deliverables/<id>/` → `<STATE_HOME>/archive/<id>/`,
+     commit `approve: <id>` (in `<STATE_HOME>`, never pushed). For reports:
+     publish per the spec's stated destination, then archive.
    - **Reject** → require the routing, never accept a bare no:
      - *fast* (spec was wrong/incomplete): capture the reason in
        `REJECTION.md` (`loop: fast`), amend `SPEC.md` together now, move back
@@ -69,8 +72,9 @@ re-queues, offer immediate `/drydock:dispatch <id>`.
 
 ## Rules
 
-- Approve mutates the target repo's PR state (draft→ready) — apply it only on
-  an explicit per-item verdict, never inferred, never batched.
+- Approve mutates the target repo's PR state (draft→ready, except for a
+  shared pull request, which stays draft — `DISPATCH.md` step 14) — apply it
+  only on an explicit per-item verdict, never inferred, never batched.
 - An unrouted rejection teaches the system nothing; refuse to archive one.
 - Merged PRs found during the stale-check → move their items to
   `<STATE_HOME>/archive/` automatically and mention it (merge was the

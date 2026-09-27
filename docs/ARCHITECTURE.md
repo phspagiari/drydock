@@ -85,7 +85,7 @@ stateDiagram-v2
 
     delivered --> active : new human comments<br/>on the PR
     delivered --> inbox : you reject (fast or slow)
-    delivered --> archive : you approve<br/>gh pr ready
+    delivered --> archive : you approve<br/>gh pr ready (unshared PR only)
     archive --> [*]
 
     note left of delivered
