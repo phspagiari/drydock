@@ -128,11 +128,15 @@ description: Self-improvement pass over drydock's own history — mine unblock d
   `refs/remotes/origin/HEAD`, never the primary checkout's `HEAD`: the
   human's checkout may sit on any branch, and the cursor tracks mainline.
   Dispatch preflight (DISPATCH step 5) compares it to that ref and flags
-  the priors mainline has moved past; nothing deletes them. Only you move
-  it, and only after re-validating. No cold file for the repo yet (a
-  pre-split STATE_HOME) → nothing to advance; skip the repo — `stale`
-  reads `NOCURSOR` and `advance` exits non-zero on the missing file, which
-  is not an error here. Otherwise run `git -C <path> fetch origin` (the
+  the priors mainline has moved past; it deletes none. Two actors
+  move it, both through `priors_check.py advance`: you, only after
+  re-validating, and propagation (DISPATCH step 14), which judges a merged
+  PR's `<cursor>..<merge>` and advances with `--if-ancestor` — never
+  backwards, and a `skip:` there leaves the cursor for you. No cold file
+  for the repo yet (a pre-split STATE_HOME) → nothing to advance; skip the
+  repo — `stale` reads `NOCURSOR` and `advance` exits non-zero on the
+  missing file, which is not an error here. Otherwise run
+  `git -C <path> fetch origin` (the
   checker never fetches), then `python3 <PLUGIN_HOME>/board/priors_check.py
   stale --repo <path> --priors <STATE_HOME>/priors/<slug>.md` now rather
   than trusting an item's `PRIORS-STALE.md` (mainline may have moved again
@@ -140,6 +144,14 @@ description: Self-improvement pass over drydock's own history — mine unblock d
   confirm or prune each. Then, and only then, `priors_check.py advance`
   with the same arguments. A retro that did not re-validate a repo leaves
   its cursor where it was.
+
+  **`stale:` sub-bullets are yours to clear.** Propagation marks a prior
+  it judged doubtful with `- stale: <merge sha>` and leaves it loading.
+  Re-read each one against `origin/<default>`: if it still holds, delete
+  the `stale:` line; if it needs rewriting, rewrite it and drop the line
+  with it (the new `asserted:` date says when); if it is wrong, prune it.
+  Nothing else clears the flag, so a retro that skips this lets them pile
+  up.
 - **Rule** (process failure a prior can't fix): draft the amendment to
   `<PLUGIN_HOME>/contracts/DISPATCH.md` / `REVIEWER.md` / `ORCHESTRATOR.md` /
   `<PLUGIN_HOME>/templates/spec-template.md`, show the diff and the incident
@@ -151,7 +163,12 @@ description: Self-improvement pass over drydock's own history — mine unblock d
   your setup has.
 
 Refuse to distill a lesson with no citation, and prune any prior the corpus
-shows to be wrong or obsolete (note why in the commit).
+shows to be wrong or obsolete (note why in the commit). Propagation removes
+priors under the same rule, and both write it the same way: one commit-body
+line per removal, `retract <key>: <why, one line>`, plus where the evidence
+lives. `priors_check.py retract --priors <file> <key>...` removes a prior;
+give it every key for one file in a single call, since legacy keys are
+positional and move when a prior above them goes.
 
 ## Close
 

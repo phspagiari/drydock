@@ -323,5 +323,24 @@ third cursor, beside the retro's `retro-cursor` and a deliverable's
 `plugin/board/priors_check.py stale` against it and writes the item's
 `PRIORS-STALE.md`, which the plan and implement executors read as a caveat
 on the priors: stale means the repo has moved, not that the prior is wrong,
-so nothing is deleted. Only the retro advances the cursor, after it has
-re-validated or pruned each flagged prior.
+so preflight deletes nothing. Two actors advance the cursor, both through
+`priors_check.py advance`: the retro, after it has re-validated or pruned
+each flagged prior, and merge propagation.
+
+**Propagation** is the edge from landed code back into the priors
+([`DISPATCH.md`](../plugin/contracts/DISPATCH.md) step 14). It runs at
+merge, not at approve — approving only marks a draft PR ready, and a PR
+that can still change has not landed. Whichever sees the merge first —
+housekeeping for a delivered item, the review pass's PR check for one
+already approved — marks the item `propagate: pending`, and
+`/drydock:review` does the work at the start of its pass, batching one
+repo's pending items so chained items that share a PR are judged once.
+It lists the files in `<cursor>..<merge>`, pre-filters the repo's priors
+by their `depends_on` globs (a prior with no globs always goes through),
+and has an agent judge each candidate against the diff: `holds`, `stale`
+(the prior gains a `stale:` sub-bullet, which the retro clears) or
+`retract` (removed, with the reason in the `<STATE_HOME>` commit). The
+cursor then advances to the merge only if the old cursor is its
+ancestor. Everything it writes is in `<STATE_HOME>`; a target repo's own
+`CLAUDE.md` is deliberately out of reach, for the reason PR #3 split the
+plugin from the state.
