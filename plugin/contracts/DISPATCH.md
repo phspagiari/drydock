@@ -13,6 +13,44 @@ running loop, so fix it here first.
 > pushable anywhere, by design. `<namespace>` is the branch namespace read
 > from `<STATE_HOME>/config` (set at `/drydock:install`).
 
+## Every session — no prompts, verified effects
+
+Every session drydock starts runs in the background, with nobody to answer
+a prompt, and this section binds each of them: the plan, implement and
+single-phase executors, a relaunch, the comment-fix executor, the diff
+reviewer, the plan gate, the retro and the orchestrator itself.
+
+- **Never run a command that can block on a prompt.** Write the
+  non-interactive form explicitly: `rm -f`, `cp -f`, `mv -f`,
+  `git commit -m` or `-F` (never bare `git commit`), and `git --no-pager`
+  or `PAGER=cat` wherever a pager can start. Assume `rm`, `cp` and `mv`
+  are aliased to their `-i` forms whatever you typed: the alias is
+  expanded before your flags are read.
+- **Never pipe a long-running producer into a truncating consumer**
+  (`| head`): the consumer exits and the producer blocks on the closed
+  pipe. Redirect to a file, then read the file.
+- **A reported effect is a verified effect.** Before reporting a mutation,
+  assert its post-state: the path is absent, present, or in the named
+  directory. Exit 0 is not evidence. An `-i` alias with no TTY reads EOF
+  as "no", changes nothing and exits 0, so the command that did nothing
+  and the command that worked report the same status.
+
+**`<STATE_HOME>` changes through git's verbs.** It is a git repository and
+every change to it is committed, so the commit can be the readback.
+
+- Move or rename a tracked file or directory with `git mv`, and delete one
+  with `git rm`. Remove an untracked file with `rm -f`, then assert it is
+  absent.
+- **Before any `git mv` of a directory, assert the destination does not
+  exist.** `git mv` into an existing directory nests the source inside it
+  and exits 0. It fails loudly only onto an existing file, and a queue
+  move is a directory move.
+- Wherever a contract says to archive `X` as `Y`, that is a rename: `X`
+  stops existing. A copy leaves a stale `X` that reads as current.
+- After committing, read the commit's own `--stat`
+  (`git --no-pager show --stat HEAD`). An intended deletion or rename that
+  the stat does not show is a failed change, not a clean one.
+
 ## Preflight (fail closed — abort loudly on any miss)
 
 1. Spec exists in `<STATE_HOME>/specs/inbox/<id>/SPEC.md`; frontmatter parses;
@@ -259,8 +297,10 @@ running loop, so fix it here first.
    to this target repo), `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md`
    if it exists (the priors the repo has moved past — stale priors are
    still advice; weigh them knowing the repo has moved), the spec, and the
-   repo in this worktree. Write
-   `<STATE_HOME>/specs/active/<id>/PLAN.md` from
+   repo in this worktree.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   Write `<STATE_HOME>/specs/active/<id>/PLAN.md` from
    `<PLUGIN_HOME>/templates/plan-template.md` — `## Tasks` is mandatory —
    as your LAST act, or to a temporary name renamed into place: its
    presence tells the orchestrator you are done. Do not modify the
@@ -294,7 +334,10 @@ running loop, so fix it here first.
    if it exists, `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md` if it
    exists — stale priors are still advice; weigh them knowing the repo has
    moved — and `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
-   they govern how you verify, get ready, and escalate. The plan session's
+   they govern how you verify, get ready, and escalate.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   The plan session's
    transcript is not available to you and must not be reconstructed:
    PLAN.md is the whole handoff, and what it does not say you read from the
    repo or escalate. Work `## Tasks` in `After`-order: run each row's
@@ -313,7 +356,10 @@ running loop, so fix it here first.
    `<STATE_HOME>/PRIORS.md` (lessons from prior runs) and
    `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific to this
    target repo), then `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 — they
-   govern how you verify, get ready, and escalate. You do NOT open a PR —
+   govern how you verify, get ready, and escalate.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   You do NOT open a PR —
    ever. Follow the spec exactly: respect Non-goals and blast radius, stop on
    any escalation condition and write QUESTION.md instead of guessing. Work
    plan-first: execute the spec's requirements in order and verify each before

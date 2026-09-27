@@ -337,6 +337,29 @@ unreviewed mutation against live infrastructure is not.
   never for dispatch starts or progress. Use the `PushNotification` tool.
 - If the human types into this session, answer from verified queue state,
   then resume the loop.
+- **The orchestrator is a session too.** DISPATCH.md's `## Every session`
+  section binds every command a tick runs, not only those on ticks that
+  dispatch. Every queue move, rename or delete that a tick report states
+  was asserted on disk first. Once per tick, before acting on any item, run
+  `python3 <PLUGIN_HOME>/board/server.py check --root <STATE_HOME>`. An
+  item it names is not acted on until its state is corrected, and the
+  tick report says so.
+- **Finished work is never destroyed.** An item in `active/` is finished
+  when it holds `READY.md`, or a `QUESTION.md` that is open by the test in
+  *Active*'s dispatch-failure bullet (the one beginning "Executor died
+  without moving state"), arm (i). Every recovery action checks this
+  first: relaunch, rescue branch, branch reset, the budget stop-and-block,
+  the second-death block, the "Needs input" capture, worktree prune, and
+  any recovery action added later. A finished item's session may be
+  stopped and its transition completed (`READY.md` → review; an open
+  `QUESTION.md` → `blocked/`). It is never rescued, reset or relaunched.
+  Its `READY.md` and `QUESTION.md` are never replaced or deleted by a
+  recovery action: what the orchestrator has to add is appended under a
+  heading beginning `## Orchestrator —`, followed by the reason and the
+  date. Worktree prune never passes `--force`; a `git worktree remove`
+  that refuses a dirty tree goes in the tick report and is not retried.
+  The ordering holds both ways: a completion path never waits for a
+  recovery action, and a recovery action never acts on a finished item.
 
 ## Tick pacing (dynamic loop)
 
