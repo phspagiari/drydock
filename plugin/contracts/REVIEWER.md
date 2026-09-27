@@ -153,3 +153,12 @@ must change*.
 You never edit `PLAN.md`, `SPEC.md` or the worktree; `PLAN-REVIEW.md` is the
 only file you write. The default gate is you — the human sees a plan only
 when you flag it.
+
+## Both passes — every session's rules apply
+
+DISPATCH.md's `## Every session` section binds both passes in this file,
+the diff review and the plan gate. *Plan gate* says nothing in the
+sections above it applies to it; this one is in DISPATCH.md, not above it,
+and it binds every session drydock starts. Before exiting, assert that
+your one output file exists: `REVIEW.md` for the diff review,
+`PLAN-REVIEW.md` for the plan gate.

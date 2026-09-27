@@ -2,6 +2,7 @@
 """drydock board — live queue dashboard for a drydock STATE_HOME.
 
     board/server.py serve [--port 8642] [--root <state-home>]
+    board/server.py check [--root <state-home>]
 
 Serves a static frontend from ``board/static/`` plus a small JSON API. Queue
 state is read from disk on every request: no cache, no background daemon, no
@@ -123,6 +124,35 @@ def chain_errors(spec: str) -> list[str]:
     return errors
 
 
+def state_errors(item: Path) -> list[str]:
+    """Why this item's files are not a state the loop should act on.
+
+    Archiving a review round is a rename. A ``<stem>.md`` byte-identical to
+    one of its own ``<stem>-r<N>.md`` archives is the trace of a copy: the
+    stale file still reads as the current round. Only exact ``-r<digits>``
+    names count, and ``round:`` is not read -- rounds restart per comment
+    batch, so the number proves nothing.
+    """
+    errors = []
+    for stem in ("REVIEW", "PLAN-REVIEW"):
+        current = item / f"{stem}.md"
+        if not current.is_file():
+            continue
+        numbered = re.compile(rf"{re.escape(stem)}-r(\d+)\.md")
+        archives = sorted(
+            (int(m.group(1)), f) for f in item.iterdir()
+            if f.is_file() and (m := numbered.fullmatch(f.name)))
+        try:
+            body = current.read_bytes()
+            copies = [f for _, f in archives if f.read_bytes() == body]
+        except OSError:
+            continue
+        if copies:
+            errors.append(f"{current.name} is a copy of {copies[-1].name}; "
+                          "the archive was a copy, not a rename")
+    return errors
+
+
 def state_dir(root: Path, state: str) -> Path:
     if state == "delivered":
         return root / "deliverables"
@@ -152,13 +182,17 @@ def _question_gist(question: str) -> str:
     return ""
 
 
-def _gist_of(root: Path, state: str, spec: str, question: str) -> str:
-    """One line of context: a broken chain, the blocker, or unmet dependencies."""
+def _gist_of(root: Path, state: str, spec: str, question: str,
+             malformed: list[str] | None = None) -> str:
+    """One line of context: a broken chain, malformed item state, the blocker,
+    or unmet dependencies."""
     broken = chain_errors(spec)
     if broken:
         # A chain that cannot be dispatched outranks whatever status the card
         # would otherwise carry — it is a defect in the spec, not a state.
         return "chain error: " + "; ".join(broken)
+    if malformed:
+        return "state error: " + "; ".join(malformed)
     if state == "blocked":
         return _question_gist(question)
     if state == "inbox":
@@ -181,6 +215,7 @@ def scan_item(root: Path, item: Path, state: str) -> dict:
         # A repo-relative report path is only reachable through the item route.
         url = f"/item/{item.name}/{Path(url).name}"
 
+    malformed = state_errors(item)
     verdict = field(read_text(item / "REVIEW.md"), "verdict")
     if not verdict and state == "active" and (item / "READY.md").is_file():
         verdict = "in-review"
@@ -194,8 +229,9 @@ def scan_item(root: Path, item: Path, state: str) -> dict:
         "branch": _chain_field(spec, "branch"),
         "pr_url": _chain_field(spec, "pr_url"),
         "chain_errors": chain_errors(spec),
+        "state_errors": malformed,
         "mtime": int(item.stat().st_mtime),
-        "gist": _gist_of(root, state, spec, question),
+        "gist": _gist_of(root, state, spec, question, malformed),
         "kind": "pr" if pr else ("report" if url else ""),
         "url": url,
         "review": verdict,
@@ -386,12 +422,31 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--root", type=Path, default=None,
                        help="drydock STATE_HOME to read "
                             "(default: $DRYDOCK_STATE_HOME or ~/.drydock)")
+    checker = sub.add_parser(
+        "check", help="report malformed item state; exit 1 if any")
+    checker.add_argument("--root", type=Path, default=None,
+                         help="drydock STATE_HOME to read "
+                              "(default: $DRYDOCK_STATE_HOME or ~/.drydock)")
     args = parser.parse_args(argv)
 
     root = (args.root or default_root()).resolve()
     if not root.is_dir():
         print(f"board: no such directory: {root}", file=sys.stderr)
         return 2
+    if args.command == "check":
+        # One line per malformed item across every state; the exit code is
+        # the verdict, so a loop can gate on it without parsing the output.
+        found = 0
+        for state in STATES:
+            base = state_dir(root, state)
+            if not base.is_dir():
+                continue
+            for item in sorted(d for d in base.iterdir()
+                               if d.is_dir() and not d.name.startswith(".")):
+                for message in state_errors(item):
+                    print(f"{state}/{item.name}: {message}")
+                    found += 1
+        return 1 if found else 0
 
     server = make_server(root, args.port)
     print(f"drydock board: http://127.0.0.1:{server.server_address[1]}  (root: {root})")
