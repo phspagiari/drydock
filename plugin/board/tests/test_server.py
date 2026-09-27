@@ -395,6 +395,7 @@ class TestChained(unittest.TestCase):
     """
 
     SHARED = "https://github.com/example/repo/pull/90"
+    UNDELIVERED_SIBLINGS = ("specs/inbox", "specs/active", "specs/blocked", "archive")
 
     @classmethod
     def setUpClass(cls):
@@ -416,6 +417,19 @@ class TestChained(unittest.TestCase):
               "pr_url: https://github.com/example/repo/pull/91\n")
         # Not shipped yet, no pull request anywhere.
         write(cls.root / "specs/inbox/unchained/SPEC.md", "track: code\n\n# Plain\n")
+        # Series roots whose only sibling has not been delivered: the usual
+        # shape, since siblings are still queued when the root is approved.
+        # One per state, each with its own pull request, so every state the
+        # declaration scan reads is pinned by a test.
+        for n, sibling_dir in enumerate(cls.UNDELIVERED_SIBLINGS, start=92):
+            url = f"https://github.com/example/repo/pull/{n}"
+            root_id = f"root-{Path(sibling_dir).name}"
+            write(cls.root / "deliverables" / root_id / "SPEC.md",
+                  "track: code\n\n# Root\n")
+            write(cls.root / "deliverables" / root_id / "DELIVERABLE.md",
+                  f"pr_url: {url}\n")
+            write(cls.root / sibling_dir / f"next-of-{root_id}" / "SPEC.md",
+                  f"track: code\nbranch: someone/{root_id}\npr_url: {url}\n\n# Next\n")
 
     @classmethod
     def tearDownClass(cls):
@@ -432,6 +446,14 @@ class TestChained(unittest.TestCase):
 
     def test_deliverable_pr_url_another_spec_chains_onto_is_chained(self):
         self.assertIs(self.row("delivered", "series-root")["chained"], True)
+
+    def test_series_root_is_chained_with_its_sibling_undelivered(self):
+        for sibling_dir in self.UNDELIVERED_SIBLINGS:
+            root_id = f"root-{Path(sibling_dir).name}"
+            with self.subTest(sibling_in=sibling_dir):
+                row = self.row("delivered", root_id)
+                self.assertIs(row["chained"], True)
+                self.assertEqual(row["gist"], server.CHAINED_GIST)
 
     def test_deliverable_pr_url_alone_is_not_chained(self):
         self.assertIs(self.row("delivered", "solo")["chained"], False)
