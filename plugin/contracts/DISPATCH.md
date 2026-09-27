@@ -50,14 +50,25 @@ running loop, so fix it here first.
      else — the case this feature exists to chain onto. Step 7's `git worktree
      add <path> <branch>` cuts it from `origin/<branch>`, which is by
      construction fresh. Proceed.
-   - The local ref exists → `git -C <target_repo> rev-list --count
-     <branch>..origin/<branch>` must print `0`. Anything else means the local
-     ref is **behind its remote**. Escalate.
+   - The local ref exists → `git -C <target_repo>
+     rev-list --left-right --count <branch>...origin/<branch>` must print
+     `0` and `0`, tab-separated: commits the local ref has that the remote
+     lacks, then commits the remote has that the local ref lacks. A non-zero
+     **left** count means the local ref is **ahead of its remote** — it
+     carries commits nobody pushed or reviewed, and they would silently
+     become this spec's base. A non-zero **right** count means it is
+     **behind its remote**. Both non-zero is divergence. Any non-zero count
+     escalates, and the escalation carries both counts and the commits
+     behind them — `git log --oneline origin/<branch>..<branch>` when ahead,
+     `git log --oneline <branch>..origin/<branch>` when behind — so the
+     human decides about named commits, not a number read back out of the
+     repo.
 
-   Do not collapse those into the bare `rev-list` alone: it exits 128 when
-   `<branch>` has no local ref, which makes this preflight strictly more
-   restrictive than the step 7 machinery it guards and blocks a chain that
-   would have worked.
+   Do not collapse those into the bare `rev-list --left-right --count`
+   alone: it exits 128 when `<branch>` has no local ref (`fatal: ambiguous
+   argument '<branch>...origin/<branch>'`), which makes this preflight
+   strictly more restrictive than the step 7 machinery it guards and blocks
+   a chain that would have worked.
    An escalation here goes by step 2's route:
    `<STATE_HOME>/specs/blocked/<id>/` with a `QUESTION.md`, before anything is
    executed. Never base on it anyway and never quietly fast-forward it. The
@@ -71,6 +82,12 @@ running loop, so fix it here first.
    head-ref mismatch escalates the same way. Opening a new pull request
    instead is not a fallback — it is the outcome the declaration exists to
    prevent.
+   **Record `preflight_sha`** — the sha this preflight actually validated:
+   `git -C <target_repo> rev-parse origin/<branch>` for a spec that declares
+   `branch:`, `origin/<default>` otherwise, read once the checks above have
+   passed. Step 7 compares the new worktree and the live remote against
+   it, because a push that lands between this fetch and `git worktree add`
+   would otherwise make a sha nobody checked the spec's base.
 
    **Then flag the priors this repo has moved past** — on either path
    above, once its checks have passed. The repo's cold priors file may
@@ -122,6 +139,69 @@ running loop, so fix it here first.
    default branch, is what the review (REVIEWER.md step 3) and every later
    fix round diff against, so a chained spec is judged on its own delta
    rather than on everything its base branch already carried.
+   **Prove the base is the one preflight validated.** Immediately after
+   `git worktree add`, compare two shas with step 5's `preflight_sha`: that
+   same `rev-parse HEAD`, and the remote as it is now — `git -C
+   <target_repo> ls-remote origin refs/heads/<branch>` (`<default>` for a
+   spec without `branch:`), which asks the remote and needs no fetch.
+   Both are needed. Nothing fetches between step 5 and `git worktree add`,
+   so a push landing in that window leaves every local ref, and therefore
+   `HEAD`, exactly where preflight saw it — only `ls-remote` sees the push;
+   `HEAD` is what catches a local ref moved in the window. Both equal →
+   proceed. Either unequal → the ref moved inside the preflight window:
+   re-run step 5's checks once — which fetches and records a fresh
+   `preflight_sha` — note in RUN.md's body that the base moved, with both
+   shas, and compare again. For a spec without `branch:`, first re-point
+   the branch just cut at the fresh `preflight_sha` (`git -C <path> reset
+   --hard <preflight_sha>`): it carries nothing yet, and without the
+   re-point `HEAD` stays at the old sha, can never agree, and a benign push
+   to the default branch escalates. A chained branch is never re-pointed;
+   step 5's third check already escalates when its local ref is behind.
+   Checks pass and the shas agree → proceed;
+   otherwise escalate by step 5's route. A second mismatch in the same
+   dispatch escalates without re-validating: a ref that moves twice during
+   one dispatch is being actively worked on, which is exactly when a chain
+   must stop and ask.
+   `base_sha:` and `preflight_sha:` are dispatcher-written header fields,
+   emitted in the single write that creates RUN.md (step 8 owns that write
+   and where the header ends), in any order, and never rewritten.
+   **RUN.md has exactly one live writer at any instant**, and that is why
+   liveness is not on its header. While an executor runs, it only appends
+   to RUN.md; the dispatcher and orchestrator rewrite the header only in
+   the gaps where no executor exists — `phase:` changes after the plan
+   executor has exited and before the implement executor starts. An
+   executor-written timestamp on the header would make any orchestrator-side
+   write during a run (a relaunch rewriting `phase:`, an amendment, a human
+   `sed`) a second live writer, and a torn header or a lost append
+   reachable. So the progress stamp is its own file,
+   `<STATE_HOME>/specs/active/<id>/.progress`, which keeps RUN.md
+   single-writer by construction — no lock, no discipline clause. It sits in
+   the item directory, so it moves with the item into `blocked/`,
+   `deliverables/` and `archive/`; never in the worktree, which carries no
+   drydock metadata (below). Its format is the header's, read by the same
+   `key: value` parser — having no `##` heading, it is read whole:
+   `last_progress: <ISO-8601 UTC>` (required), `hold: <N>m` when a long
+   command is about to start, and optionally `step:` and `note:`, in any
+   order. Every stamp is written to `.progress.tmp` in the same directory
+   and renamed onto `.progress` — write-then-rename, never in place — so a
+   reader sees the old stamp or the new one and never a partial file.
+   `hold:` covers only the stamp that carries it. The stamp is run state,
+   not a record: it belongs in `<STATE_HOME>/.gitignore` beside
+   `.orchestrator-heartbeat`, and nothing in this procedure writes that
+   line yet, so a move commit may carry a stale stamp — harmless, since
+   `<STATE_HOME>` has no remote.
+   **The executor stamps on progress, not on a clock**: it rewrites
+   `.progress` on entering each numbered step of this procedure, and
+   immediately before any command expected to run quiet for longer than
+   the orchestrator's 10-minute stall threshold — a build, a full test
+   suite, a long query — with `hold:` set to how long that command may
+   take. A stamp written on a heartbeat rather than on progress is liveness
+   theatre: it hides exactly the stalls it exists to expose.
+   `max_wall_clock` is **working** time: an executor that finds it was
+   frozen — a provider retry loop with a static token count, a session
+   resumed across a sleep boundary — logs the stalled minutes in RUN.md's
+   body (a log line, never a header field) and subtracts them before
+   judging itself against the budget.
    **Two specs chaining onto the same `branch:` cannot be dispatched
    concurrently.** Git allows one worktree per branch, so the second
    `git worktree add <path> <branch>` dies with exit 128 (`fatal: '<branch>'

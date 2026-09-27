@@ -12,10 +12,10 @@
   into place: "PLAN.md present" is what tells the orchestrator the plan is
   finished, so it must never observe a half-written one.
 
-  Clarification markers use the spec template's syntax and mean the same
-  thing: a gap the human must close — never invent an answer to close one.
-  An unresolved marker anywhere in this file blocks the item into
-  specs/blocked/ with QUESTION.md. (Deleting this comment is fine; the
+  A gap the human must close is never closed by inventing an answer, and
+  never raised in this file either: escalate instead of writing this file
+  (DISPATCH step 8a). A clarification marker left here anyway is flagged
+  by the gate. (Deleting this comment is fine; the
   sections below are what the gate checks.)
 -->
 
@@ -59,8 +59,9 @@ mechanism, which layer, which existing helper — and why that one.]
 
 [What reading the repo turned up that the spec did not anticipate: a
 contract the spec's mechanism collides with, a caller it did not list, a
-criterion that cannot pass as written. A risk that needs the human's call is
-raised here as a clarification marker, and blocks the item.]
+criterion that cannot pass as written. A risk that needs the human's call
+does not go here: escalate instead of writing this file. A clarification
+marker left here anyway is flagged by the gate.]
 
 ## Assumptions
 

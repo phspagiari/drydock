@@ -101,13 +101,15 @@ class ContractRefsTest(unittest.TestCase):
         self.assertIn(("ORCHESTRATOR.md", "DISPATCH steps 16–17"), found)
         self.assertGreater(len(found), 20)
 
-    def test_dispatch_step_set_is_pinned(self):
+    def test_dispatch_step_sequence_is_pinned(self):
         # Pinned exactly, not "no gaps": inserting a step and shifting the
         # rest keeps every citation resolving -- to the wrong step. Adding a
         # step 18 means editing this line on purpose, and re-checking every
-        # citation of the steps after it.
-        have = steps((PLUGIN / "contracts/DISPATCH.md").read_text())
-        self.assertEqual(have, set(range(1, 18)))
+        # citation of the steps after it. An ordered list, not a set: a
+        # duplicate "9." would pass a set and renders as a shift of every
+        # later number.
+        text = (PLUGIN / "contracts/DISPATCH.md").read_text()
+        self.assertEqual([int(n) for n in STEP_RE.findall(text)], list(range(1, 18)))
 
     def test_dispatch_sub_steps_are_inline_labels(self):
         # 8a/8b/8c are bold labels inside step 8, each exactly once, and never
