@@ -31,7 +31,9 @@ depends_on: []                   # spec ids that must have shipped (deliverables
                                  # chaining onto work in flight.
                                  # Dispatch proves it is not behind its remote.
 # pr_url: <existing PR url>      # optional: push into this OPEN pull request at
-                                 # ship instead of opening a new draft one.
+                                 # ship instead of opening a new draft one, and
+                                 # replace its title and body with the reviewed
+                                 # prepared text (a full replacement).
                                  # Requires branch:, which must be its head ref.
 budget:
   max_agents: 4                  # hard cap on concurrent subagents

@@ -147,8 +147,11 @@ latest version always wins.
      the repair pass (DISPATCH step 12a); then open the draft PR
      (`gh pr create --draft`, title/body
      verbatim from READY.md), push to the target repo's remote — **unless
-     the item declares a `pr_url`**, and then the push is the whole of it
-     and `gh pr create` does not run — per DISPATCH step 12; move to
+     the item declares a `pr_url`**: then `gh pr create` does not run, and
+     ship checks the live title and body against READY.md's
+     `pr_text_base`, pushes, applies READY.md's title/body with
+     `gh pr edit` as a full replacement and verifies the read-back, any
+     failure → `blocked/` — per DISPATCH step 12; move to
      `<STATE_HOME>/deliverables/<id>/` with `DELIVERABLE.md` (`pr_url:`),
      prune the worktree, commit in `<STATE_HOME>` (never pushed), notify
      ("deliverable ready: <id> — reviewed, <link>"). The human sees a PR
