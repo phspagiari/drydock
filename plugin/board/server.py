@@ -204,12 +204,43 @@ def _gist_of(root: Path, state: str, spec: str, question: str,
     return ""
 
 
-def scan_item(root: Path, item: Path, state: str) -> dict:
+#: What a delivered card says when approving it must not mark its pull request
+#: ready (DISPATCH step 14). The board renders ``gist``, not ``chained``.
+CHAINED_GIST = "shared pull request — approving leaves it draft"
+
+
+def declared_pr_urls(root: Path) -> frozenset[str]:
+    """Every ``pr_url:`` a spec anywhere in the queue declares as its chain.
+
+    Only SPEC.md counts. DELIVERABLE.md records a ``pr_url:`` for every pull
+    request dispatch ships, chained or not, so it says where an item landed,
+    never that the pull request is shared.
+    """
+    urls = set()
+    for state in STATES:
+        base = state_dir(root, state)
+        if base.is_dir():
+            for d in base.iterdir():
+                if d.is_dir() and not d.name.startswith("."):
+                    url = _chain_field(read_text(d / "SPEC.md"), "pr_url")
+                    if url:
+                        urls.add(url)
+    return frozenset(urls)
+
+
+def scan_item(root: Path, item: Path, state: str,
+              shared: frozenset[str] = frozenset()) -> dict:
+    """One card. ``shared`` is :func:`declared_pr_urls` for the whole queue."""
     spec = read_text(item / "SPEC.md")
     deliverable = read_text(item / "DELIVERABLE.md")
     question = read_text(item / "QUESTION.md") if state == "blocked" else ""
 
     pr = field(deliverable, "pr_url")
+    # Chained: this spec pushes into a pull request it did not open, or the
+    # pull request it did open is one some other spec chains onto. Either way
+    # approving this item does not finish that pull request.
+    chained = bool(_chain_field(spec, "pr_url")) \
+        or _chain_field(deliverable, "pr_url") in shared
     url = pr or field(deliverable, "report_url")
     if url and not url.startswith(("http://", "https://")):
         # A repo-relative report path is only reachable through the item route.
@@ -229,9 +260,11 @@ def scan_item(root: Path, item: Path, state: str) -> dict:
         "branch": _chain_field(spec, "branch"),
         "pr_url": _chain_field(spec, "pr_url"),
         "chain_errors": chain_errors(spec),
+        "chained": chained,
         "state_errors": malformed,
         "mtime": int(item.stat().st_mtime),
-        "gist": _gist_of(root, state, spec, question, malformed),
+        "gist": _gist_of(root, state, spec, question, malformed)
+        or (CHAINED_GIST if chained and state == "delivered" else ""),
         "kind": "pr" if pr else ("report" if url else ""),
         "url": url,
         "review": verdict,
@@ -243,6 +276,7 @@ def scan_item(root: Path, item: Path, state: str) -> dict:
 def scan(root: Path) -> dict:
     """Full queue state, read fresh from disk."""
     out: dict = {}
+    shared = declared_pr_urls(root)
     for state in STATES:
         base = state_dir(root, state)
         rows = []
@@ -251,7 +285,7 @@ def scan(root: Path) -> dict:
                      if d.is_dir() and not d.name.startswith(".")]
             # Newest first, id as the tiebreak so equal mtimes stay deterministic.
             items.sort(key=lambda p: (-p.stat().st_mtime, p.name))
-            rows = [scan_item(root, d, state) for d in items]
+            rows = [scan_item(root, d, state, shared) for d in items]
         out[state] = rows
     now = datetime.now().astimezone()
     out["now"] = now.strftime("%Y-%m-%d %H:%M:%S %Z").strip()

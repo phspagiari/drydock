@@ -385,6 +385,88 @@ class TestScan(BoardTestCase):
             self.assertEqual([state[s] for s in server.STATES], [[], [], [], [], []])
 
 
+class TestChained(unittest.TestCase):
+    """``chained``: does approving this item finish its pull request?
+
+    Its own queue, so the shared fixture's counts stay as they are. Every
+    delivered item here carries a DELIVERABLE.md ``pr_url:`` — dispatch writes
+    one for every pull request it ships — so that field alone must never be
+    what makes an item chained.
+    """
+
+    SHARED = "https://github.com/example/repo/pull/90"
+    UNDELIVERED_SIBLINGS = ("specs/inbox", "specs/active", "specs/blocked", "archive")
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = TemporaryDirectory()
+        cls.root = Path(cls._tmp.name)
+        # Opened the shared pull request itself, so its spec names no pr_url.
+        write(cls.root / "deliverables/series-root/SPEC.md", "track: code\n\n# Root\n")
+        write(cls.root / "deliverables/series-root/DELIVERABLE.md",
+              f"pr_url: {cls.SHARED}\n")
+        # Chains onto it: the spec declares the pull request it pushes into.
+        write(cls.root / "deliverables/series-next/SPEC.md",
+              "track: code\nbranch: someone/series\n"
+              f"pr_url: {cls.SHARED}   # the root's pull request\n\n# Next\n")
+        write(cls.root / "deliverables/series-next/DELIVERABLE.md",
+              f"pr_url: {cls.SHARED}\n")
+        # Owns its pull request outright.
+        write(cls.root / "deliverables/solo/SPEC.md", "track: code\n\n# Solo\n")
+        write(cls.root / "deliverables/solo/DELIVERABLE.md",
+              "pr_url: https://github.com/example/repo/pull/91\n")
+        # Not shipped yet, no pull request anywhere.
+        write(cls.root / "specs/inbox/unchained/SPEC.md", "track: code\n\n# Plain\n")
+        # Series roots whose only sibling has not been delivered: the usual
+        # shape, since siblings are still queued when the root is approved.
+        # One per state, each with its own pull request, so every state the
+        # declaration scan reads is pinned by a test.
+        for n, sibling_dir in enumerate(cls.UNDELIVERED_SIBLINGS, start=92):
+            url = f"https://github.com/example/repo/pull/{n}"
+            root_id = f"root-{Path(sibling_dir).name}"
+            write(cls.root / "deliverables" / root_id / "SPEC.md",
+                  "track: code\n\n# Root\n")
+            write(cls.root / "deliverables" / root_id / "DELIVERABLE.md",
+                  f"pr_url: {url}\n")
+            write(cls.root / sibling_dir / f"next-of-{root_id}" / "SPEC.md",
+                  f"track: code\nbranch: someone/{root_id}\npr_url: {url}\n\n# Next\n")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def row(self, state, item_id):
+        return next(r for r in server.scan(self.root)[state] if r["id"] == item_id)
+
+    def test_pr_url_in_the_spec_is_chained(self):
+        self.assertIs(self.row("delivered", "series-next")["chained"], True)
+
+    def test_no_pr_url_anywhere_is_not_chained(self):
+        self.assertIs(self.row("inbox", "unchained")["chained"], False)
+
+    def test_deliverable_pr_url_another_spec_chains_onto_is_chained(self):
+        self.assertIs(self.row("delivered", "series-root")["chained"], True)
+
+    def test_series_root_is_chained_with_its_sibling_undelivered(self):
+        for sibling_dir in self.UNDELIVERED_SIBLINGS:
+            root_id = f"root-{Path(sibling_dir).name}"
+            with self.subTest(sibling_in=sibling_dir):
+                row = self.row("delivered", root_id)
+                self.assertIs(row["chained"], True)
+                self.assertEqual(row["gist"], server.CHAINED_GIST)
+
+    def test_deliverable_pr_url_alone_is_not_chained(self):
+        self.assertIs(self.row("delivered", "solo")["chained"], False)
+
+    def test_a_chained_delivered_card_says_approval_leaves_it_draft(self):
+        self.assertEqual(self.row("delivered", "series-root")["gist"], server.CHAINED_GIST)
+        self.assertEqual(self.row("delivered", "solo")["gist"], "")
+
+    def test_scan_item_alone_still_sees_its_own_spec(self):
+        item = self.root / "deliverables/series-next"
+        self.assertIs(server.scan_item(self.root, item, "delivered")["chained"], True)
+
+
 class TestPathGuards(BoardTestCase):
     def test_rejects_traversal_in_id_and_name(self):
         for item_id, name in [("..", "SPEC.md"),

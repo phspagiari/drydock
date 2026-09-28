@@ -520,6 +520,18 @@ every change to it is committed, so the commit can be the readback.
 
 14. Approve → `gh pr ready <url>` (draft → ready for the team's normal
     review) or publish the report; move to `<STATE_HOME>/archive/<id>/`.
+    **Unless the pull request is shared**: the item's spec frontmatter
+    declares a `pr_url` (it pushed into a pull request it did not open —
+    step 12), or another item's spec frontmatter declares this item's
+    `pr_url` as the one it chains onto. Then `gh pr ready` does not run and
+    the pull request is left exactly as it is; the item is still archived.
+    Approving an item says this increment is good; readiness belongs to the
+    pull request, and only the human knows when every item sharing it has
+    landed. Marking it ready is then a separate human action — drydock never
+    takes it, at any point. DELIVERABLE.md's `pr_url:` does not decide this:
+    step 12 records one for every pull request it ships, chained or not.
+    Nor can a spec nobody has written yet: the item that opened a pull
+    request reads as unshared until a later spec declares it.
 
     **Propagation — a landed diff re-checks the priors it touches.** It
     runs only once a `pr` deliverable's pull request has *merged*: a merge

@@ -208,7 +208,8 @@ what it tried and failed to break, and a link to a draft PR that already exists.
 Three verdicts:
 
 - **Approve** → `gh pr ready <url>` flips the draft to ready for your team's
-  normal review, and the item moves to `archive/`.
+  normal review, and the item moves to `archive/`. A pull request shared with
+  other items (chained through `pr_url:`) stays draft; marking it ready is yours.
 - **Reject** → you must route it. *Fast* means the spec was wrong: amend it
   together, back to the inbox. *Slow* means the execution or the skill was
   wrong: the correction is folded into the skill that produced the failure,
