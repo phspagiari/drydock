@@ -62,18 +62,84 @@ latest version always wins.
    state: queue directories first (disk is truth), then RUN.md mtime, then
    session liveness via the ListAgents tool / `claude agents`. Never narrate
    a status you didn't verify.
+   - **Phase** (DISPATCH step 8) — RUN.md's header is the `key: value`
+     lines before the first `##` heading of any kind, and the dispatcher's
+     new-item write emits `base_sha:`, `phase: plan` and the `## Log`
+     heading in the same single write (write-then-rename), never as a
+     second edit. Read the header's `phase:` line (other fields may sit
+     beside it) and derive the item's state from disk, first match wins:
+
+     | State | Test | Action |
+     |---|---|---|
+     | old-shape in-flight | RUN.md has no `phase:` line | single-phase rules |
+     | plan running | `phase: plan`, `PLAN.md` absent | verify progress as today |
+     | awaiting gate | `phase: plan`, `PLAN.md` present, `PLAN-REVIEW.md` absent | run the gate (8b) |
+     | ready to implement | `phase: plan`, `PLAN-REVIEW.md` `verdict: approve` | set `phase: implement`, start 8c |
+     | plan flagged | `phase: plan`, `PLAN-REVIEW.md` `verdict: flag` | to `blocked/`, findings as the question |
+     | implementing | `phase: implement` | verify progress as today |
+     | anything else | no row above matches — e.g. a `phase:` value other than `plan`/`implement`, or a `PLAN-REVIEW.md` verdict other than `approve`/`flag` | to `blocked/`, QUESTION.md naming the unrecognised `phase:` / verdict value |
+
+     An old-shape in-flight item — RUN.md with no `phase:` line — was
+     dispatched before the plan phase existed: it runs to completion under
+     the single-phase rules, and is never stalled for lacking a `PLAN.md`
+     and never gated. Neither "awaiting gate" nor "ready to implement" is
+     stalled either: no executor is meant to be running, and the next step
+     is yours. **Run the gate**: unless a gate session for the item is
+     already live (one that ran and died is the dead-gate case below),
+     `cd <STATE_HOME> && claude --bg --model <review model>
+     --permission-mode <permission-mode> "Plan gate for
+     <STATE_HOME>/specs/active/<id> (worktree <path>) per
+     <PLUGIN_HOME>/contracts/REVIEWER.md, Plan gate."` — it writes
+     `PLAN-REVIEW.md`. **Start 8c**: rewrite the header's `phase: plan`
+     line to `phase: implement` (that line only), then launch DISPATCH's 8c
+     prompt from the worktree the way Inbox launches an executor. **Plan
+     flagged** and **anything else**: move, commit, notify as for any
+     block below. The last row fails closed, as preflight does: a new
+     `phase:` value is a deliberate edit to this table, never something an
+     orchestrator guesses its way through.
    - Executor wrote `READY.md` (zero-calls gate passed, no PR exists) and
      no current-round `REVIEW.md` → dispatch the adversarial reviewer on
      the WORKTREE: `cd <STATE_HOME> && claude --bg --model <review model>
      --permission-mode <permission-mode> "Review <STATE_HOME>/specs/active/<id>
      (worktree <path>) per <PLUGIN_HOME>/contracts/REVIEWER.md. Round <N>."`
-     — N = 1 + fix rounds so far. Do not notify; keep the worktree.
+     — N = fix rounds completed in this run. Do not notify; keep the worktree.
+     **A session that is still live does not hold review up.** `READY.md`
+     present, `git -C <path> status --porcelain` empty, and `HEAD` unchanged
+     across a 5-minute window → stop the executor session and dispatch the
+     reviewer as above, whatever the session is doing or reporting — a
+     session can wedge after its work is finished and never come back. The
+     5 minutes are longer than the longest quiet pause seen in a healthy
+     executor mid-step (3 minutes), so the window cannot sample inside a
+     normal pause, and shorter than the 10-minute stall threshold below, so
+     a finished item reaches review before the stall handling could redo
+     its work. This path does not wait for the stall handling to have run,
+     and the stall handling never rescues, resets or relaunches an item
+     whose `READY.md` is present. A dirty tree or a `HEAD` that moved inside
+     the window means the executor is still writing: leave it to the
+     liveness check. `READY.md` beside an open `QUESTION.md` (the
+     dispatch-failure bullet's first arm) → the escalation wins: do not
+     dispatch the reviewer; the item goes to `blocked/`.
    - `REVIEW.md` verdict appeared → act per DISPATCH step 12:
      **fix** → dispatch a fix executor in the SAME worktree against the
-     findings (round cap 2; archive the round's REVIEW.md as
-     `REVIEW-r<N>.md`); **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
+     findings (archive the round's REVIEW.md as `REVIEW-r<M>.md`, M = its
+     item-level `review:`, so names cannot collide across runs; a
+     REVIEW.md with no `review:` key is pre-change provenance);
+     **fix** with `cap_retire: true` → run the mechanical repair pass
+     (DISPATCH step 12a–12d), then ship as below — a failed pass flags;
+     the reviewer prompt's `Round <N>` and REVIEW.md's `round:` are one
+     value, fix rounds completed in the current run. Round cap 2 fix
+     rounds per run: a run begins at dispatch from `inbox/` and ends at
+     `ship` or `archive`; an `inbox/` re-queue after a `flag` starts a new
+     run (`round` resets to 0); a re-dispatch after a dispatch failure
+     with the deliverable byte-unchanged is the same round retried
+     (neither advances nor resets); the repair pass is not a fix round.
+     At the cap, any `judgement` finding → the reviewer flags; all
+     `mechanical` → `cap_retire: true`.
+     **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
      with the findings as the question, notify with the unblock command;
-     **ship** → open the draft PR (`gh pr create --draft`, title/body
+     **ship** → any `mechanical` finding outstanding first goes through
+     the repair pass (DISPATCH step 12a); then open the draft PR
+     (`gh pr create --draft`, title/body
      verbatim from READY.md), push to the target repo's remote — **unless
      the item declares a `pr_url`**, and then the push is the whole of it
      and `gh pr create` does not run — per DISPATCH step 12; move to
@@ -91,16 +157,126 @@ latest version always wins.
      include the ready-to-paste command to work it:
      `claude "/drydock:spec unblock <id>"` (same for specs blocked at
      preflight).
-   - Executor died without moving state (no agent, stale RUN.md) → ONE
-     relaunch from the same spec; a second death → move to `blocked/` with
-     QUESTION.md describing the failure, notify ("dispatch failure: <id>").
-   - `max_wall_clock` exceeded → stop the agent, move to `blocked/`,
-     notify ("budget exceeded: <id>").
+   - Executor died without moving state (no agent, stale RUN.md) — this
+     applies only in the Phase states where an executor is meant to be
+     running: **plan running**, **implementing** and **old-shape
+     in-flight**. In *awaiting gate* and *ready to implement* no agent and
+     a stale RUN.md are the normal condition, not a death. → ONE relaunch
+     from the same spec, with that state's prompt: 8a for plan running, 8c
+     for implementing, the single-phase prompt for old-shape. A **dead
+     gate** — a gate session launched for the item that is no longer live
+     and left no `PLAN-REVIEW.md` — is relaunched with the *Plan gate*
+     prompt above, never 8a (8a would overwrite the plan under review),
+     under the same one-relaunch cap. A second death of either kind → move
+     to `blocked/` with QUESTION.md describing the failure, notify
+     ("dispatch failure: <id>").
+     **An executor that is alive but stalled** by the liveness check below
+     is a dispatch failure too, under the same scope and the same single
+     relaunch. **Finished work is excluded first, and the exclusion covers
+     this whole handler** — stop, rescue, reset and relaunch. It has two
+     arms, checked in this order. **(i) An open `QUESTION.md`**: the file
+     is present in `active/<id>/` and its last `##` heading does not begin
+     with `## Resolution`. The executor finished an escalation and wedged
+     while handing it off. Stop the session, complete the move to
+     `blocked/` and notify with the unblock command, as for any escalation.
+     A dirty tree has its paths appended to that QUESTION.md as a note;
+     nothing is stashed or committed. Never rescue, reset or relaunch it,
+     whatever the state of the tree or of `READY.md`. A `QUESTION.md`
+     whose last `##` heading is a `## Resolution …` is history carried in
+     from an earlier unblock and does not trigger this arm — presence
+     alone would send every re-dispatched item back to `blocked/`.
+     **(ii) `READY.md`**: present and
+     `git -C <path> status --porcelain` empty → do nothing here; the
+     ready-to-review bullet above owns the item. `READY.md` present and the
+     tree dirty → stop the session, move the item to `blocked/` with a
+     QUESTION.md naming the dirty paths, notify ("dispatch failure: <id>"),
+     and never rescue, reset or relaunch it: the reset guard below is
+     satisfied by a finished, unpushed run, so a late check would strip the
+     finished commit off the branch. Every other stalled item: stop the
+     session first. Then commit everything in the worktree, tracked or not,
+     to a new local branch `rescue/<id>-wip`; reset the item's branch to the
+     sha the run started at — `base_sha:` for a first run, the tip DISPATCH
+     step 10's push left on `origin` for a run resumed after an escalation —
+     and leave the rescue commit's files in the worktree uncommitted, so the
+     relaunch inherits the tree while the branch carries nothing unreviewed.
+     The reset is local and conditional: legal only when every commit
+     between that sha and the branch tip was made by this run and none is
+     on any remote; if any other commit landed on the branch, escalate
+     instead of resetting. Push neither branch, and never force-push a
+     shared one. Relaunch once with that state's prompt and what is left of
+     `max_wall_clock` once the stalled minutes are taken back out, adding:
+     *"This worktree holds a stalled session's work, saved on
+     `rescue/<id>-wip`. Re-run every acceptance criterion on it before
+     building on it; evidence older than the rescue commit is a lead, not a
+     result."* A second stall, or a death after a stall, is the second
+     failure: `blocked/`, QUESTION.md, "dispatch failure: <id>". Any
+     QUESTION.md or DELIVERABLE.md written for a stalled run reports
+     **elapsed** and **stalled** minutes as separate numbers, and never
+     reports elapsed wall clock as work.
+   - **Liveness, then budget** — the liveness check applies in exactly the
+     states the dead-executor check above is scoped to, by that bullet's
+     own list, which is not repeated here, and it runs **every tick for
+     every item in those states**, not only once `max_wall_clock` is
+     exceeded: a wedge on a closed pipe or an interactive prompt sits far
+     inside its budget. Where no executor session is meant to exist, a
+     stale stamp is the expected condition and never a stall. Each tick,
+     read `last_progress:` from the item's `.progress` (DISPATCH step 7);
+     when that file is absent or does not parse, fall back to RUN.md's
+     mtime, the secondary signal. An age within 10 minutes, or within that
+     stamp's `hold:`, → **live**. Older → **suspect**, and a suspect is
+     never stopped on age alone: sample twice, at least 30 seconds apart,
+     (a) RUN.md's size and mtime and (b) the session transcript — the mtime
+     and size of the newest `*.jsonl` found **recursively** under
+     `~/.claude/projects/<worktree-slug>/`, where `<worktree-slug>` is the
+     worktree's absolute path with every `/` and `.` replaced by `-`.
+     **The session transcript includes its subagent transcripts.** Claude
+     Code writes a subagent's turns to
+     `<worktree-slug>/<session-id>/subagents/agent-*.jsonl`, not to the
+     parent file, so the parent stays flat while the session waits on a
+     subagent — inside a foreground Agent call, or idle until a background
+     one reports — and a look at the top level alone reads that healthy
+     wait as a stall. The session and its subagents write a record on
+     every model turn and every tool result, and nothing while blocked
+     inside a tool; the newest file needs no session id, because executor
+     and reviewer never share a worktree at once and a finished transcript
+     does not grow.
+     Either one advancing → live, working through a long step; re-check
+     next tick. **Neither advancing → stalled**, and the dispatch-failure
+     bullet above handles it. **A transcript that cannot be sampled is not
+     evidence**: the slug directory missing, no `*.jsonl` at any depth
+     under it, or a sampler whose output is empty or failed →
+     **indeterminate, never stalled**. Two empty samples are never
+     "unchanged": reading them as an equal pair is the mistake this clause
+     exists to prevent. Whether the session is dead or alive
+     is ListAgents' / `claude agents`' answer, and a dead one is the
+     dispatch-failure path above. Process CPU is not a signal either way:
+     nothing records which process is the executor, and the session's own
+     process keeps using CPU while it waits inside a tool. A healthy
+     command that runs quiet past 10 minutes without the `hold:` stamp
+     DISPATCH step 7 requires is an executor defect, and its cost is the
+     one relaunch; the threshold is not raised to absorb it.
+     The session's status string (`shell`, `waiting`, `blocked`) is **not
+     evidence either way**: a healthy build and a session wedged on a
+     closed pipe have shown the same string four minutes apart. Nor is a
+     wedge always sleep — a pipe or an interactive prompt freezes a session
+     on a machine that never slept — so a keep-awake guard does not
+     replace this check. Why 10 minutes: it is longer than any single step
+     in the stalled runs it was measured on, and a larger number would
+     delay every real stall by the margin it buys; a legitimately long
+     step is carried by `hold:` and by the two samples, not by the number.
+     `max_wall_clock` exceeded and live → genuinely over budget: stop the
+     agent, move to `blocked/`, notify ("budget exceeded: <id>"). Exceeded
+     and stalled → not a budget failure; it is the stall above. Exceeded
+     and indeterminate → a dead session is the death above; a live one is
+     over budget as if live, since nothing shows it stalled.
 3. **Housekeeping** — sweep `<STATE_HOME>/deliverables/*/DELIVERABLE.md`
    recorded `pr_url`s (`gh pr view --json state` — never scan the target
    repo's PR list): **merged** → move the item to `<STATE_HOME>/archive/`,
    commit `archive: <id> (merged)`; a merge is a completed approval, so this
-   is bookkeeping — tick-report it, no notification. **Closed without merge**
+   is bookkeeping — tick-report it, no notification. For a `pr` deliverable,
+   write `propagate: pending` into the archived `DELIVERABLE.md` in that same
+   commit — a marker only: `/drydock:review` runs the judgment (DISPATCH step
+   14), never the tick. **Closed without merge**
    → leave the item in place and note it in the tick report; that verdict
    belongs to the human's review pass. **Open PR with new human comments**
    (anything beyond DELIVERABLE.md's `comments_seen:` cursor; check reviews,
@@ -176,6 +352,31 @@ unreviewed mutation against live infrastructure is not.
   never for dispatch starts or progress. Use the `PushNotification` tool.
 - If the human types into this session, answer from verified queue state,
   then resume the loop.
+- **The orchestrator is a session too.** DISPATCH.md's `## Every session`
+  section binds every command a tick runs, not only those on ticks that
+  dispatch. Every queue move, rename or delete that a tick report states
+  was asserted on disk first. Once per tick, before acting on any item, run
+  `python3 <PLUGIN_HOME>/board/server.py check --root <STATE_HOME>`. An
+  `active/` item it names moves to `blocked/` with the `check` line as its
+  question, appended under a `## Orchestrator —` heading if it already
+  holds a `QUESTION.md`, and is not otherwise acted on. An item it names
+  in any other state goes in the tick report and never gates the tick.
+- **Finished work is never destroyed.** An item in `active/` is finished
+  when it holds `READY.md`, or a `QUESTION.md` that is open by the test in
+  *Active*'s dispatch-failure bullet (the one beginning "Executor died
+  without moving state"), arm (i). Every recovery action checks this
+  first: relaunch, rescue branch, branch reset, the budget stop-and-block,
+  the second-death block, the "Needs input" capture, worktree prune, and
+  any recovery action added later. A finished item's session may be
+  stopped and its transition completed (`READY.md` → review; an open
+  `QUESTION.md` → `blocked/`). It is never rescued, reset or relaunched.
+  Its `READY.md` and `QUESTION.md` are never replaced or deleted by a
+  recovery action: what the orchestrator has to add is appended under a
+  heading beginning `## Orchestrator —`, followed by the reason and the
+  date. Worktree prune never passes `--force`; a `git worktree remove`
+  that refuses a dirty tree goes in the tick report and is not retried.
+  The ordering holds both ways: a completion path never waits for a
+  recovery action, and a recovery action never acts on a finished item.
 
 ## Tick pacing (dynamic loop)
 

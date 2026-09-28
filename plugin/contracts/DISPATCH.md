@@ -13,6 +13,58 @@ running loop, so fix it here first.
 > pushable anywhere, by design. `<namespace>` is the branch namespace read
 > from `<STATE_HOME>/config` (set at `/drydock:install`).
 
+## Every session — no prompts, verified effects
+
+Every session drydock starts runs in the background, with nobody to answer
+a prompt, and this section binds each of them: the plan, implement and
+single-phase executors, a relaunch, the comment-fix executor, the diff
+reviewer, the plan gate, the retro and the orchestrator itself.
+
+- **Never run a command that can block on a prompt.** Write the
+  non-interactive form explicitly: `rm -f`, `cp -f`, `mv -f`,
+  `git commit -m` or `-F` (never bare `git commit`), and `git --no-pager`
+  or `PAGER=cat` wherever a pager can start. Assume `rm`, `cp` and `mv`
+  are aliased to their `-i` forms whatever you typed: the alias is
+  expanded before your flags are read.
+- **Before any move, rename or copy, assert the destination does not
+  exist**, file or directory, whether the verb is `mv`, `cp` or `git mv`.
+  `mv -f` and `cp -f` are the forms to write only once that assertion has
+  passed: `-f` suppresses the prompt, and the prompt was the only thing
+  protecting an existing destination. If it exists, stop and report it,
+  or escalate; never overwrite it. `mv -f` onto an existing file replaces
+  it and exits 0, and the post-state check below cannot tell, since the
+  source is absent and the destination present exactly as after a clean
+  rename. Under the alias, BSD `cp -f` onto an existing file still
+  prompts, as `-f` does not cancel `-i` there.
+- **Never pipe a long-running producer into a truncating consumer**
+  (`| head`): the consumer exits and the producer blocks on the closed
+  pipe. Redirect to a file, then read the file.
+- **A reported effect is a verified effect.** Before reporting a mutation,
+  assert its post-state: the path is absent, present, or in the named
+  directory. Exit 0 is not evidence. An `-i` alias with no TTY reads EOF
+  as "no", changes nothing and exits 0, so the command that did nothing
+  and the command that worked report the same status.
+
+**`<STATE_HOME>` changes through git's verbs.** It is a git repository and
+every change to it is committed, so the commit can be the readback.
+
+- Move or rename a tracked file or directory with `git mv`, and delete one
+  with `git rm`. Remove an untracked file with `rm -f`, then assert it is
+  absent.
+- Rename an untracked file, such as a review file just written and not
+  yet committed, with `mv -f`: `git mv` refuses an untracked source and
+  exits 128. Assert the destination absent first, then assert the source
+  absent and the destination present.
+- The destination assertion is not optional for `git mv` either. `git mv`
+  into an existing directory nests the source inside it and exits 0, and
+  a queue move is a directory move. It refuses an existing destination
+  only when that destination is a file.
+- Wherever a contract says to archive `X` as `Y`, that is a rename: `X`
+  stops existing. A copy leaves a stale `X` that reads as current.
+- After committing, read the commit's own `--stat`
+  (`git --no-pager show --stat HEAD`). An intended deletion or rename that
+  the stat does not show is a failed change, not a clean one.
+
 ## Preflight (fail closed — abort loudly on any miss)
 
 1. Spec exists in `<STATE_HOME>/specs/inbox/<id>/SPEC.md`; frontmatter parses;
@@ -50,14 +102,25 @@ running loop, so fix it here first.
      else — the case this feature exists to chain onto. Step 7's `git worktree
      add <path> <branch>` cuts it from `origin/<branch>`, which is by
      construction fresh. Proceed.
-   - The local ref exists → `git -C <target_repo> rev-list --count
-     <branch>..origin/<branch>` must print `0`. Anything else means the local
-     ref is **behind its remote**. Escalate.
+   - The local ref exists → `git -C <target_repo>
+     rev-list --left-right --count <branch>...origin/<branch>` must print
+     `0` and `0`, tab-separated: commits the local ref has that the remote
+     lacks, then commits the remote has that the local ref lacks. A non-zero
+     **left** count means the local ref is **ahead of its remote** — it
+     carries commits nobody pushed or reviewed, and they would silently
+     become this spec's base. A non-zero **right** count means it is
+     **behind its remote**. Both non-zero is divergence. Any non-zero count
+     escalates, and the escalation carries both counts and the commits
+     behind them — `git log --oneline origin/<branch>..<branch>` when ahead,
+     `git log --oneline <branch>..origin/<branch>` when behind — so the
+     human decides about named commits, not a number read back out of the
+     repo.
 
-   Do not collapse those into the bare `rev-list` alone: it exits 128 when
-   `<branch>` has no local ref, which makes this preflight strictly more
-   restrictive than the step 7 machinery it guards and blocks a chain that
-   would have worked.
+   Do not collapse those into the bare `rev-list --left-right --count`
+   alone: it exits 128 when `<branch>` has no local ref (`fatal: ambiguous
+   argument '<branch>...origin/<branch>'`), which makes this preflight
+   strictly more restrictive than the step 7 machinery it guards and blocks
+   a chain that would have worked.
    An escalation here goes by step 2's route:
    `<STATE_HOME>/specs/blocked/<id>/` with a `QUESTION.md`, before anything is
    executed. Never base on it anyway and never quietly fast-forward it. The
@@ -71,6 +134,43 @@ running loop, so fix it here first.
    head-ref mismatch escalates the same way. Opening a new pull request
    instead is not a fallback — it is the outcome the declaration exists to
    prevent.
+   **Record `preflight_sha`** — the sha this preflight actually validated:
+   `git -C <target_repo> rev-parse origin/<branch>` for a spec that declares
+   `branch:`, `origin/<default>` otherwise, read once the checks above have
+   passed. Step 7 compares the new worktree and the live remote against
+   it, because a push that lands between this fetch and `git worktree add`
+   would otherwise make a sha nobody checked the spec's base.
+
+   **Then flag the priors this repo has moved past** — on either path
+   above, once its checks have passed. The repo's cold priors file may
+   carry a `code-cursor:` line, the mainline commit its priors were last
+   validated against. The cursor ref is the repo's mainline,
+   `origin/<default>`, which the checker resolves through
+   `refs/remotes/origin/HEAD` — never the primary checkout's `HEAD`, which
+   is whatever branch the human has parked there. The checker does not
+   fetch; after the same `fetch`, run it over that file and write its
+   output into the item's directory:
+
+   ```sh
+   python3 <PLUGIN_HOME>/board/priors_check.py stale --repo <target_repo> \
+     --priors <STATE_HOME>/priors/<slug>.md \
+     > <STATE_HOME>/specs/inbox/<id>/PRIORS-STALE.md
+   ```
+
+   `<slug>` is step 8's. The item is still in `inbox/` here; step 6's move
+   carries `PRIORS-STALE.md` to `<STATE_HOME>/specs/active/<id>/`, which is
+   where the 8a and 8c executors read it. Write it on every dispatch, so it
+   always describes this one: empty means `origin/<default>` is the cursor,
+   `NOCURSOR` means no cursor is recorded (a repo with no cold file yet
+   reads the same way), and one `STALE <key> <asserted> <depends_on>` line
+   per prior in the file means mainline has moved since they were
+   validated. This flags and never deletes — a stale prior still loads —
+   and only the retro and `priors_check.py advance` ever write the cursor.
+   The file is parsed before the cursor is compared, so a non-zero exit
+   does not depend on whether the repo moved: two cursor lines, a malformed
+   record, a repo `git` cannot read, or an unset `origin/HEAD` (the message
+   names the fix, `git remote set-head origin -a`) escalates by step 2's
+   route like any other preflight miss.
 
 ## Execute
 
@@ -91,6 +191,69 @@ running loop, so fix it here first.
    default branch, is what the review (REVIEWER.md step 3) and every later
    fix round diff against, so a chained spec is judged on its own delta
    rather than on everything its base branch already carried.
+   **Prove the base is the one preflight validated.** Immediately after
+   `git worktree add`, compare two shas with step 5's `preflight_sha`: that
+   same `rev-parse HEAD`, and the remote as it is now — `git -C
+   <target_repo> ls-remote origin refs/heads/<branch>` (`<default>` for a
+   spec without `branch:`), which asks the remote and needs no fetch.
+   Both are needed. Nothing fetches between step 5 and `git worktree add`,
+   so a push landing in that window leaves every local ref, and therefore
+   `HEAD`, exactly where preflight saw it — only `ls-remote` sees the push;
+   `HEAD` is what catches a local ref moved in the window. Both equal →
+   proceed. Either unequal → the ref moved inside the preflight window:
+   re-run step 5's checks once — which fetches and records a fresh
+   `preflight_sha` — note in RUN.md's body that the base moved, with both
+   shas, and compare again. For a spec without `branch:`, first re-point
+   the branch just cut at the fresh `preflight_sha` (`git -C <path> reset
+   --hard <preflight_sha>`): it carries nothing yet, and without the
+   re-point `HEAD` stays at the old sha, can never agree, and a benign push
+   to the default branch escalates. A chained branch is never re-pointed;
+   step 5's third check already escalates when its local ref is behind.
+   Checks pass and the shas agree → proceed;
+   otherwise escalate by step 5's route. A second mismatch in the same
+   dispatch escalates without re-validating: a ref that moves twice during
+   one dispatch is being actively worked on, which is exactly when a chain
+   must stop and ask.
+   `base_sha:` and `preflight_sha:` are dispatcher-written header fields,
+   emitted in the single write that creates RUN.md (step 8 owns that write
+   and where the header ends), in any order, and never rewritten.
+   **RUN.md has exactly one live writer at any instant**, and that is why
+   liveness is not on its header. While an executor runs, it only appends
+   to RUN.md; the dispatcher and orchestrator rewrite the header only in
+   the gaps where no executor exists — `phase:` changes after the plan
+   executor has exited and before the implement executor starts. An
+   executor-written timestamp on the header would make any orchestrator-side
+   write during a run (a relaunch rewriting `phase:`, an amendment, a human
+   `sed`) a second live writer, and a torn header or a lost append
+   reachable. So the progress stamp is its own file,
+   `<STATE_HOME>/specs/active/<id>/.progress`, which keeps RUN.md
+   single-writer by construction — no lock, no discipline clause. It sits in
+   the item directory, so it moves with the item into `blocked/`,
+   `deliverables/` and `archive/`; never in the worktree, which carries no
+   drydock metadata (below). Its format is the header's, read by the same
+   `key: value` parser — having no `##` heading, it is read whole:
+   `last_progress: <ISO-8601 UTC>` (required), `hold: <N>m` when a long
+   command is about to start, and optionally `step:` and `note:`, in any
+   order. Every stamp is written to `.progress.tmp` in the same directory
+   and renamed onto `.progress` — write-then-rename, never in place — so a
+   reader sees the old stamp or the new one and never a partial file.
+   `hold:` covers only the stamp that carries it. The stamp is run state,
+   not a record: it belongs in `<STATE_HOME>/.gitignore` beside
+   `.orchestrator-heartbeat`, and nothing in this procedure writes that
+   line yet, so a move commit may carry a stale stamp — harmless, since
+   `<STATE_HOME>` has no remote.
+   **The executor stamps on progress, not on a clock**: it rewrites
+   `.progress` on entering each numbered step of this procedure, and
+   immediately before any command expected to run quiet for longer than
+   the orchestrator's 10-minute stall threshold — a build, a full test
+   suite, a long query — with `hold:` set to how long that command may
+   take. A stamp written on a heartbeat rather than on progress is liveness
+   theatre: it hides exactly the stalls it exists to expose.
+   `max_wall_clock` is **working** time: an executor that finds it was
+   frozen — a provider retry loop with a static token count, a session
+   resumed across a sleep boundary — logs the stalled minutes in RUN.md's
+   body (a log line, never a header field) and subtracts them before
+   judging itself against the budget.
    **Two specs chaining onto the same `branch:` cannot be dispatched
    concurrently.** Git allows one worktree per branch, so the second
    `git worktree add <path> <branch>` dies with exit 128 (`fatal: '<branch>'
@@ -103,12 +266,114 @@ running loop, so fix it here first.
    **Repo-agnostic rule:** the target repo carries zero drydock metadata —
    no labels, tags, or spec files committed there. Branch + PR are the only
    footprint; `<STATE_HOME>` is the sole registry of which PRs are ours.
-8. Start a fresh Claude session in the worktree with the prompt:
-   *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md`. First read
+8. Start the executor — for an item dispatched since the plan phase
+   existed, three phases in sequence, each a **fresh** Claude session in the
+   worktree, with an artifact as the only handoff between them: a plan
+   executor writes `PLAN.md` and exits (8a), a gate approves or flags it
+   (8b), and an implement executor that never saw the plan session builds
+   it (8c). The research that produced a plan is noise to the
+   implementation; the plan is the signal, and the reset is the point.
+
+   **The phase marker.** RUN.md's header is the `key: value` lines before
+   the first `##` heading of any kind, and the dispatcher's new-item write
+   emits `base_sha:`, `phase: plan` and the `## Log` heading in the same
+   single write (write-then-rename), never as a second edit. The header
+   carries a `phase:` line: `phase: plan` from 8a on, `phase: implement`
+   from 8c on. It is the only thing that tells the phases apart. RUN.md's
+   *existence* cannot: step 7 writes RUN.md for every item before this
+   step runs. Read `phase:` as one `key: value` line of the header,
+   whatever other fields sit beside it and in whatever order; a `phase:`
+   under any `##` heading is not the marker. Setting it replaces that one
+   line and leaves every other header line alone.
+
+   **Which prompt a dispatch launches** — decided by RUN.md as it stood
+   when this dispatch began:
+
+   - **No RUN.md** — a new item. Step 7's RUN.md write is that single
+     write: `base_sha:` together with `phase: plan`, then the `## Log`
+     heading, written to a temporary name and renamed into place — so no
+     RUN.md ever exists without its `phase:` line or its boundary. Then
+     launch 8a.
+   - **An old-shape in-flight item: RUN.md with no `phase:` line** —
+     dispatched before this change, re-queued after an unblock. It finishes
+     under the single-phase prompt below, to completion, unblocks included;
+     it never gets a plan phase or a gate.
+   - **`phase: implement`** — launch 8c; it resumes per step 10.
+   - **`phase: plan`** — rename a `flag`ged `PLAN-REVIEW.md` to
+     `PLAN-REVIEW-r<N>.md` (N = 1 + those already there). Then `PLAN.md`
+     absent → launch 8a; present → launch nothing: the unblock amended it,
+     and the orchestrator's next tick gates it again (8b). An unblock that
+     wants a fresh plan deletes `PLAN.md`.
+
+   **8a — Plan.** Prompt: *"Plan `<STATE_HOME>/specs/active/<id>/SPEC.md`;
+   do not implement it. Read `<STATE_HOME>/PRIORS.md` (lessons from prior
+   runs), `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific
+   to this target repo), `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md`
+   if it exists (the priors the repo has moved past — stale priors are
+   still advice; weigh them knowing the repo has moved), the spec, and the
+   repo in this worktree.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   Write `<STATE_HOME>/specs/active/<id>/PLAN.md` from
+   `<PLUGIN_HOME>/templates/plan-template.md` — `## Tasks` is mandatory —
+   as your LAST act, or to a temporary name renamed into place: its
+   presence tells the orchestrator you are done. Do not modify the
+   worktree: no edits, no commits, no branch changes. Log to
+   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go. If anything needs
+   the human's call, escalate per `<PLUGIN_HOME>/contracts/DISPATCH.md`
+   step 10 instead of finishing the plan — with no worktree changes there
+   is nothing to push: leave RUN.md a handoff, move the item to
+   `<STATE_HOME>/specs/blocked/<id>/`, and as your LAST act write
+   QUESTION.md there. Do NOT write PLAN.md on this path — not first, not
+   last, not at all. Then exit."* So an 8a session ends in exactly one of
+   two ways: `PLAN.md` written last and nothing else, or QUESTION.md
+   written last and no `PLAN.md`. A marker the plan session left in
+   `PLAN.md` anyway is the gate's to catch (8b), and it flags the item.
+
+   **8b — Gate.** Run by the orchestrator, not by the dispatch: an item
+   with `phase: plan`, a `PLAN.md` and no `PLAN-REVIEW.md` gets a reviewer
+   session per `<PLUGIN_HOME>/contracts/REVIEWER.md`, *Plan gate*, which
+   writes `PLAN-REVIEW.md` with `verdict: approve` or `flag`. **flag** →
+   `<STATE_HOME>/specs/blocked/<id>/` with the findings as the question,
+   by step 10's route. **approve** → 8c. The gate is the reviewer agent by
+   default; the human sees a plan only when it is flagged. A manual
+   `/drydock:dispatch` launches 8a and returns — 8b and 8c need an
+   orchestrator tick.
+
+   **8c — Implement.** The orchestrator rewrites the `phase:` line to
+   `phase: implement`, then starts a fresh session in the worktree.
+   Prompt: *"Execute `<STATE_HOME>/specs/active/<id>/SPEC.md` by the plan
+   in `<STATE_HOME>/specs/active/<id>/PLAN.md`. Read exactly these: the
+   spec, PLAN.md, `<STATE_HOME>/PRIORS.md`, `<STATE_HOME>/priors/<slug>.md`
+   if it exists, `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md` if it
+   exists — stale priors are still advice; weigh them knowing the repo has
+   moved — and `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
+   they govern how you verify, get ready, and escalate.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   The plan session's
+   transcript is not available to you and must not be reconstructed:
+   PLAN.md is the whole handoff, and what it does not say you read from the
+   repo or escalate. Work `## Tasks` in `After`-order: run each row's
+   `Verify`, save its output under
+   `<STATE_HOME>/specs/active/<id>/evidence/`, and tick the row in RUN.md —
+   a log line `- [x] T<n> — <output path>` — before starting the next.
+   If RUN.md already ticks rows, you are resuming: start from the first
+   unticked row (step 10). You do NOT open a PR — ever.
+   Follow the spec exactly: respect Non-goals and blast radius, stop on any
+   escalation condition and write QUESTION.md instead of guessing. Log to
+   `<STATE_HOME>/specs/active/<id>/RUN.md` as you go."*
+
+   **Single-phase (old-shape in-flight items only).** Prompt, unchanged
+   from before the plan phase existed: *"Execute
+   `<STATE_HOME>/specs/active/<id>/SPEC.md`. First read
    `<STATE_HOME>/PRIORS.md` (lessons from prior runs) and
    `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific to this
    target repo), then `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 — they
-   govern how you verify, get ready, and escalate. You do NOT open a PR —
+   govern how you verify, get ready, and escalate.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   You do NOT open a PR —
    ever. Follow the spec exactly: respect Non-goals and blast radius, stop on
    any escalation condition and write QUESTION.md instead of guessing. Work
    plan-first: execute the spec's requirements in order and verify each before
@@ -123,9 +388,14 @@ running loop, so fix it here first.
    `_review.md`) that belong to one phase rather than to one repo.
    Substitute the real slug into the prompt; a repo with no cold file yet is
    the ordinary case, not a fault.
-   An executor loads the hot file and its repo's cold file and **nothing
-   else** — `_spec-writing.md` is `/drydock:spec`'s, `_review.md` is the
-   reviewer's, and `_pr-prose.md` arrives at step 11 and not before. A
+   An executor — plan, implement or single-phase — loads the hot file and
+   its repo's cold file and **no other priors file** (the plan and implement
+   executors also read that cold file's stale list, `PRIORS-STALE.md` from
+   step 5; the single-phase prompt predates it) — `_spec-writing.md` is
+   `/drydock:spec`'s, `_review.md` is the diff reviewer's, and
+   `_pr-prose.md` arrives at step 11 and not before. The plan gate (8b)
+   loads the same two an executor does: `_review.md` is lore about diffs,
+   and a plan has none. A
    STATE_HOME still holding one monolithic `PRIORS.md` is a pre-split one:
    it loads whole and correctly, and `/drydock:install` migrates it.
 9. Executor runs all acceptance criteria itself, saving raw output under
@@ -154,6 +424,13 @@ running loop, so fix it here first.
     design: after an unblock, a FRESH executor continues from the amended
     spec + branch + RUN.md, never the old session. Unpushed work in a pruned
     worktree is lost work.
+    In the implement phase (`phase: implement`, step 8c) that fresh
+    executor resumes from the **first unticked task** in RUN.md. If the
+    unblock amended `PLAN.md`, it re-reads the plan first and reconciles
+    the ticked rows against the new `## Tasks` — a ticked row the new plan
+    dropped or changed is re-verified, not trusted — before continuing.
+    An old-shape in-flight item (RUN.md with no `phase:` line) has no task
+    list: it resumes from RUN.md's handoff, exactly as before.
 11. **All clean** → read `<STATE_HOME>/priors/_pr-prose.md` if it exists —
     the phase file for exactly this step, and the one place the loop has
     recorded what prepared PR bodies keep getting wrong — then write
@@ -173,10 +450,22 @@ running loop, so fix it here first.
     **on the worktree/branch** — `git diff` against base, not a PR. Verdicts:
     - **fix** → a fix executor runs in the SAME worktree against
       `REVIEW.md`'s findings (criteria = parent's + one check per finding),
-      then back to step 10. Round cap 2, then flag.
+      then back to step 10 for the next review. Round cap 2 fix rounds per
+      run, per REVIEWER.md's *Hard limits*: a run begins at dispatch from
+      `inbox/` and ends at `ship` or `archive`; an `inbox/` re-queue after
+      a `flag` starts a new run and resets `round` to 0; a re-dispatch
+      after a dispatch failure with the deliverable byte-unchanged is the
+      same round retried; the repair pass is not a fix round. At the cap,
+      any `judgement` finding left → the reviewer flags.
+    - **fix** with `cap_retire: true` (at the cap, every remaining finding
+      `mechanical`) → the mechanical repair pass below, then **ship**.
     - **flag** → `<STATE_HOME>/specs/blocked/<id>/` with REVIEW.md findings as
       the question. The human decides before any PR exists.
-    - **ship** → NOW the draft PR is opened (`gh pr create --draft`, title +
+    - **ship** → any `mechanical` finding outstanding, whatever its
+      `surface`, first goes through the repair pass below. With only
+      `judgement` findings left, DELIVERABLE.md's accepted-at-ship list
+      records each with its `surface` tag.
+      NOW the draft PR is opened (`gh pr create --draft`, title +
       body verbatim from READY.md), branch pushed to the TARGET repo's
       remote. **Unless the item declares a `pr_url`** (spec frontmatter, or
       DELIVERABLE.md from an earlier round): then the push is the whole of
@@ -190,6 +479,39 @@ running loop, so fix it here first.
       `pr_url:`/`report_url:`); prune the worktree. The PR lands already
       reviewed and fixed. PR state is later read back per recorded URL,
       never by scanning the target repo's PR list.
+
+    **The mechanical repair pass** — one procedure, serving both exits
+    above. It verifies; it raises no findings of its own, and it runs at
+    most once per run.
+
+    **12a — Apply.** A fix executor runs in the SAME worktree and applies
+    each `mechanical` finding's verbatim replacement — and nothing else.
+    It may not repair anything absent from `REVIEW.md`.
+
+    **12b — Verify.** The orchestrator runs each finding's check block
+    verbatim, capturing stdout, stderr and exit status to
+    `<STATE_HOME>/specs/active/<id>/evidence/repair-pass/`.
+
+    **12c — Prove scope**, by what was edited. It never rewrites a commit
+    — no amend, rebase, reset, squash or force-push, whether or not the
+    remote carries the commit yet:
+    - any file in the diff → the repair lands as one new commit whose
+      parent is the reviewed `HEAD` (`git rev-parse HEAD^` equals the sha
+      the reviewer reviewed), that file's acceptance criteria re-run, and
+      the push that follows is a fast-forward — into a declared `pr_url`
+      too, whose `headRefOid` must be an ancestor of the new `HEAD`;
+    - `READY.md` only → `git rev-parse HEAD` unchanged (no commit touched).
+
+    A defect in an existing commit's message cannot be repaired without a
+    rewrite, so it is never `mechanical` (REVIEWER.md); it routes as a
+    `ship-facing` `judgement` finding and reaches the human in
+    `DELIVERABLE.md`'s accepted-at-ship list.
+
+    **12d — Route.** Every check passes and every scope proof holds →
+    continue to the verdict's normal destination, listing every applied
+    edit and its evidence path in `DELIVERABLE.md`. Any check fails, any
+    scope proof moves, or any finding proves not to be mechanical →
+    **flag**, with the pass's evidence as the question.
 13. Commit the move in `<STATE_HOME>`'s own git repo — never pushed, it has
     no remote. Notify per the orchestrator's Notifications policy
     (`PushNotification`; a manual dispatch just reports in-chat).
@@ -210,6 +532,99 @@ running loop, so fix it here first.
     step 12 records one for every pull request it ships, chained or not.
     Nor can a spec nobody has written yet: the item that opened a pull
     request reads as unshared until a later spec declares it.
+
+    **Propagation — a landed diff re-checks the priors it touches.** It
+    runs only once a `pr` deliverable's pull request has *merged*: a merge
+    commit on mainline is landed, a draft or ready PR is not, so it never
+    runs at ship and never for a PR still open at approve. Items with
+    `deliverable: report` skip it — there is no landed diff — and nothing
+    marks them. What starts it:
+    - approve, when `gh pr view <url> --json state,mergeCommit` already
+      reads `MERGED`: run the procedure below now, for this item's repo;
+    - approve of a PR that is still open: write `propagate: on-merge` into
+      the archived `DELIVERABLE.md`; the review pass's opening PR check
+      rewrites it to `propagate: pending` once that PR reads `MERGED`;
+    - ORCHESTRATOR step 3, archiving a delivered item whose PR merged,
+      writes `propagate: pending` — a marker only, no judgment in the tick.
+
+    `/drydock:review` runs the procedure at the start of its pass for every
+    `target_repo` with an item marked `propagate: pending`, before it walks
+    anything else. Per repo:
+    1. **Batch.** Take every item in `<STATE_HOME>/archive/` for this
+       `target_repo` marked `propagate: pending`, plus the item being
+       approved if it qualified above. Resolve each `pr_url`'s
+       `mergeCommit.oid` and dedupe: chained items share one `pr_url`, so
+       they share one merge and one judgment. After `git -C <target_repo>
+       fetch origin`, every merge must be an ancestor of `origin/<default>`
+       — one that is not stops the procedure; tell the human what you saw
+       and never guess a range. `<merge>` is the newest of them.
+    2. **Place `<merge>` against the cursor before any range exists.**
+       `<cursor>` is the repo's `code-cursor`; a retro may already have
+       advanced it past `<merge>`, and `git diff <cursor>..<merge>` would
+       then show later commits inverted and omit the merge itself. So:
+       - `git -C <target_repo> merge-base --is-ancestor <merge> <cursor>`
+         (tried first, so an equal cursor counts): the cursor already
+         covers the merge. Skip items 3–5 and go to item 6 with no
+         verdicts.
+       - `git -C <target_repo> merge-base --is-ancestor <cursor> <merge>`:
+         the range is `<cursor>..<merge>`. Not the PR's own `base..merge`:
+         advancing the cursor to `<merge>` claims every commit before it
+         was checked.
+       - No cursor yet: the range is `<earliest merge>^1..<merge>`; say so
+         in the record.
+       - Neither is an ancestor of the other (the cursor is on a side
+         line): stop, tell the human what you saw, never guess a range.
+    3. **Pre-filter.** Write the range's file list and list the candidates:
+
+       ```sh
+       git -C <target_repo> diff --name-only <cursor>..<merge> > <list>
+       python3 <PLUGIN_HOME>/board/priors_check.py candidates \
+         --priors <STATE_HOME>/priors/<slug>.md --diff-files <list>
+       ```
+
+       A prior with no globs is always a candidate; the filter only narrows.
+    4. **Judge.** Start one agent with the candidate list, the range's diff
+       restricted to the candidates' matched files (the whole diff for a
+       candidate with no globs), and this instruction: for each candidate
+       return one verdict — `holds`, `stale` or `retract` — and the hunk,
+       file and line range, that decided it. A verdict without its deciding
+       hunk is not a verdict; ask again.
+    5. **Apply** all of the file's verdicts in **one** `priors_check.py
+       retract --priors <file>` call — legacy keys are positional, so a
+       second call can hit the wrong prior. `holds` changes nothing;
+       `stale` is `--sha <merge> --mark <key>`, which adds a `stale:`
+       sub-bullet; `retract` is the bare key, which removes the prior. Then
+       `priors_check.py advance --if-ancestor --repo <target_repo> --priors
+       <file> --ref <merge>`; a `skip:` line leaves the cursor to the retro
+       — note it in the record. A refused `retract` (exit 2: an unknown,
+       duplicate or shared key) writes nothing: leave every marker
+       `pending`, commit nothing, and report the refusal to the human.
+       When no verdict is `stale` or `retract` (all `holds`, or no
+       candidates), skip the `retract` call — it refuses an empty key
+       list — and run `advance` alone.
+    6. **Record and commit**, only once item 5 succeeded or was skipped.
+       Write the range, the merge shape (squash: one parent; merge commit:
+       two) and every verdict with its hunk to
+       `<STATE_HOME>/archive/<id>/PROPAGATION.md` of the item with the
+       newest merge. Set that item's marker and every other batched item's
+       to `propagate: done <merge sha> (see archive/<id>/PROPAGATION.md)`.
+       Commit once in `<STATE_HOME>`: `propagate: <slug> <merge sha> — <n>
+       holds, <m> stale, <k> retracted`, its body one line per removal:
+       `retract <key>: <why, one line> (see archive/<id>/PROPAGATION.md)`.
+       When item 2 found the merge covered, write no PROPAGATION.md: set
+       the markers to `propagate: done <merge sha> (covered by code-cursor
+       <cursor>)` and commit `propagate: <slug> <merge sha> — covered by
+       code-cursor <cursor>`.
+
+    **Propagation writes `<STATE_HOME>` only** — `priors/<slug>.md`, the
+    archive, their commit. The target repo's own `CLAUDE.md`, its README
+    and every other file in it are out of bounds, even when a prior there
+    has gone stale: drydock-derived state never lands in a pushable tree,
+    the line PR #3 drew when it split `PLUGIN_HOME` from `STATE_HOME`. A
+    repo with no `priors/<slug>.md` (a pre-split STATE_HOME) has nothing to
+    judge: skip items 2–5, set every batched marker to `propagate: done
+    <merge sha> (no priors file)` and commit that alone as
+    `propagate: <slug> <merge sha> — no priors file`.
 15. Reject → write `REJECTION.md` with the reason and its loop:
     `fast` (amend spec → inbox) or `slow` (fold the correction into the
     executing skill → re-queue).

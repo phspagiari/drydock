@@ -57,6 +57,21 @@ and never judges a deliverable — it moves state, dispatches, and verifies. Bot
 of the jobs it refuses are jobs where being wrong is expensive, and both are
 handled by an actor with a contract of its own.
 
+The executor row is three sessions, not one, for anything dispatched since the
+plan phase landed. A **plan** executor reads the spec, the priors and the repo,
+writes `PLAN.md` — an approach, the files it will touch, and a mandatory
+`## Tasks` table whose every row carries a runnable `Verify` — and exits
+without touching the worktree. A **gate**, the reviewer agent by default and
+the human only when it flags, checks the plan against the spec. Then an
+**implement** executor starts cold from the spec and the plan alone, works the
+tasks in order and ticks each in `RUN.md`, and carries on from DISPATCH step 9
+as before. The plan session's transcript never reaches it: the research is the
+noise, the plan is the signal, and reviewing a plan costs minutes where
+reviewing a wrong diff costs an hour. A `phase:` line in `RUN.md`'s header
+tells the orchestrator which phase an item is in. The prompts live in
+[`DISPATCH.md`](../plugin/contracts/DISPATCH.md) step 8, the state table in
+[`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md).
+
 ## Lifecycle
 
 ```mermaid
@@ -182,9 +197,13 @@ whole arrangement:
 
 The reviewer is adversarial on purpose. Its instruction is to try to reject the
 work, and a `ship` verdict has to say what it tried and failed to break. It
-also carries a **round cap of 2**: work that survives two fix rounds without
-shipping becomes a `flag` regardless, because a third mechanical round is
-usually a sign the spec was wrong, not the code.
+also carries a **round cap of 2** fix rounds per run, and the cap governs
+judgement only: a finding that still needs judgement after two fix rounds
+becomes a `flag`, because a third round is usually a sign the spec was wrong,
+not the code. A finding the reviewer tags *mechanical* — a verbatim
+replacement plus an executable check, applicable without rewriting a commit —
+goes through the mechanical repair pass, then ships, and is never by itself
+the reason a human is called.
 
 Its powers are narrow by construction — it writes `REVIEW.md` and nothing else.
 It never edits the worktree, the spec, or `READY.md`, and it never opens a pull
@@ -295,3 +314,42 @@ the incremental-view-maintenance framing the layout came out of, are in
 the split has one monolithic file and keeps working — `/drydock:install` runs
 `plugin/board/split_priors.py` over it once, splitting on the `## Target
 repo:` and topic headings such a file has already grown on its own.
+
+A prior the retro writes is a **record**, not a bare bullet: a
+`[<slug>/<key>]` handle and four sub-bullets — `scope`, `derived_from`,
+`depends_on` (a falsifiable fact, with the paths it rests on backticked as
+globs) and `asserted`. Older bullets stay legal and read as
+`depends_on: unknown`. Each repo's cold file may carry a `code-cursor:`
+line, the mainline (`origin/<default>`) commit its priors were last
+validated against, never the human checkout's `HEAD` — drydock's
+third cursor, beside the retro's `retro-cursor` and a deliverable's
+`comments_seen:`. Dispatch preflight (DISPATCH step 5) runs
+`plugin/board/priors_check.py stale` against it and writes the item's
+`PRIORS-STALE.md`, which the plan and implement executors read as a caveat
+on the priors: stale means the repo has moved, not that the prior is wrong,
+so preflight deletes nothing. Two actors advance the cursor, both through
+`priors_check.py advance`: the retro, after it has re-validated or pruned
+each flagged prior, and merge propagation.
+
+**Propagation** is the edge from landed code back into the priors
+([`DISPATCH.md`](../plugin/contracts/DISPATCH.md) step 14). It runs at
+merge, not at approve — approving only marks a draft PR ready, and a PR
+that can still change has not landed. Whichever sees the merge first —
+housekeeping for a delivered item, the review pass's PR check for one
+already approved — marks the item `propagate: pending`, and
+`/drydock:review` does the work at the start of its pass, batching one
+repo's pending items so chained items that share a PR are judged once.
+It first places the merge against the cursor: a merge the cursor has
+already passed (a retro advanced it) is covered by the cursor and closes
+without a judgment, and a cursor on a side line stops for the human,
+since `<cursor>..<merge>` would then be a reversed or two-tree diff.
+Otherwise it lists the files in `<cursor>..<merge>`, pre-filters the
+repo's priors by their `depends_on` globs (a prior with no globs always
+goes through), and has an agent judge each candidate against the diff:
+`holds`, `stale` (the prior gains a `stale:` sub-bullet, which the retro
+clears) or `retract` (removed, with the reason in the `<STATE_HOME>`
+commit). The cursor then advances to the merge only if the old cursor is
+its ancestor, and the markers close only after the edit and the cursor
+move succeed. Everything it writes is in `<STATE_HOME>`; a target repo's own
+`CLAUDE.md` is deliberately out of reach, for the reason PR #3 split the
+plugin from the state.
