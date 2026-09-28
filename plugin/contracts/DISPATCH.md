@@ -74,10 +74,18 @@ every change to it is committed, so the commit can be the readback.
    branch it tracks), and `branch:` is never the branch every other spec is
    cut from — `main` or `master` is what the board rejects by name, but the
    rule is the target repo's default branch whatever it is called, because
-   chaining onto it is just committing to it. The board applies those two
-   rules to every card, so a malformed chain is visible before dispatch
-   reaches it.
-2. **Zero unresolved `[NEEDS CLARIFICATION]` markers.** If any → move to
+   chaining onto it is just committing to it. Both rules are evaluated by
+   `python3 <PLUGIN_HOME>/board/queue_rules.py check <SPEC.md>`, the code
+   the board applies to every card: any `chain:` line it prints fails
+   preflight (fail closed). It knows `main` and `master` only, so a default
+   branch by any other name is still yours to check.
+2. **Zero unresolved `NEEDS CLARIFICATION` markers.** A marker is the
+   bracketed form with a colon and a non-empty body, on one line:
+   `[NEEDS CLARIFICATION: …]`. The bare words, the bracketed words with no
+   colon or no body, and any mention inside a code span, a fenced block or
+   an HTML comment are not markers, so a spec that describes the convention
+   does not block itself. `queue_rules.py check` (item 1) evaluates it —
+   never a substring count: exit `1` with a `marker:` line → move to
    `<STATE_HOME>/specs/blocked/<id>/` with `QUESTION.md`; do not execute.
 3. Every acceptance-criterion command is runnable from the worktree (tools
    exist, credentials fresh — re-authenticate now, not mid-run).

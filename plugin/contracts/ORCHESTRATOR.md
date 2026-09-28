@@ -36,12 +36,18 @@ latest version always wins.
 
 1. **Inbox** — list `<STATE_HOME>/specs/inbox/*/SPEC.md`, **ordered
    lexicographically by id** (deterministic FIFO; never by mtime — moves and
-   edits reset it). Skip any spec whose `depends_on` ids are not ALL in
-   `<STATE_HOME>/deliverables/` or `<STATE_HOME>/archive/` — report it as
-   "waiting on <ids>", which is a normal state, not an error. For each
-   eligible spec, in order, while fewer than **2** executions are active:
-   - Run the DISPATCH preflight (fail closed). Unresolved
-     `[NEEDS CLARIFICATION]` → move to `<STATE_HOME>/specs/blocked/<id>/`
+   edits reset it). Eligibility is what
+   `python3 <PLUGIN_HOME>/board/queue_rules.py eligible --root <STATE_HOME>`
+   prints, one line per inbox spec in that order. A `depends_on` id is met
+   when it is a directory in `<STATE_HOME>/deliverables/` or
+   `<STATE_HOME>/archive/`, and that CLI is the rule's implementation: never
+   parse `depends_on` yourself. Report a `WAITING` line as "waiting on
+   <ids>", which is a normal state, not an error. A non-zero exit skips
+   dispatch this tick and notifies — there is no hand-parsed fallback. For
+   each `ELIGIBLE` spec, in order, while fewer than **2** executions are
+   active:
+   - Run the DISPATCH preflight (fail closed). `queue_rules.py check`
+     reports a `marker:` line → move to `<STATE_HOME>/specs/blocked/<id>/`
      with `QUESTION.md`, commit (in `<STATE_HOME>`, never pushed), notify
      ("spec blocked: <id> — <gist>").
    - Preflight passes → move to `<STATE_HOME>/specs/active/<id>/`, commit,

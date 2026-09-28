@@ -26,6 +26,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+# The frontmatter predicates live in queue_rules, which the loop runs as a CLI;
+# re-exported here so ``server.deps_of`` and friends stay the same objects.
+from queue_rules import (  # noqa: F401
+    DEFAULT_BRANCHES,
+    _chain_field,
+    chain_errors,
+    deps_of,
+    field,
+    unmet_deps,
+)
+
 DEFAULT_PORT = 8642
 
 #: Item files the API will hand out. Anything else in an item directory stays
@@ -68,60 +79,6 @@ def read_text(path: Path) -> str:
         return path.read_text(errors="replace")
     except OSError:
         return ""
-
-
-def field(text: str, key: str) -> str:
-    """Value of a yaml-ish ``key: value`` line, quotes stripped."""
-    m = re.search(rf"^\s*{re.escape(key)}:\s*(.+?)\s*$", text, re.M)
-    return m.group(1).strip("'\"") if m else ""
-
-
-def deps_of(spec: str) -> list[str]:
-    """``depends_on`` ids — inline ``[a, b]`` or YAML block list, comments stripped."""
-    m = re.search(r"^depends_on:[ \t]*(\[[^\]\n]*\])?[ \t]*(?:#[^\n]*)?"
-                  r"((?:\n[ \t]*-[ \t]*[^\n]+)*)", spec, re.M)
-    if not m:
-        return []
-    ids = re.findall(r"[\w][\w.-]{3,}", (m.group(1) or "").split("#")[0])
-    for line in (m.group(2) or "").splitlines():
-        mm = re.search(r"-[ \t]*([\w][\w.-]{3,})", line.split("#")[0])
-        if mm:
-            ids.append(mm.group(1))
-    return ids
-
-
-#: Branch names a chained spec may never declare: basing on one is not chaining,
-#: it is committing to the branch every other spec is cut from.
-DEFAULT_BRANCHES = frozenset({"main", "master"})
-
-
-def _chain_field(spec: str, key: str) -> str:
-    """A chain field's value, trailing ``# comment`` dropped.
-
-    Frontmatter lines carry one (see ``templates/spec-template.md``) and
-    :func:`field` keeps whatever follows the colon, comment included.
-    """
-    return field(spec, key).split("#")[0].strip().strip("'\"")
-
-
-def chain_errors(spec: str) -> list[str]:
-    """Why this spec's ``branch:``/``pr_url:`` pair cannot be dispatched.
-
-    One human-readable message per violated rule; empty when the chain is
-    dispatchable. Neither field set is the default path and valid, and
-    ``branch:`` alone is valid too — it chains onto an existing branch and
-    still opens a new pull request at ship.
-    """
-    branch = _chain_field(spec, "branch")
-    pr_url = _chain_field(spec, "pr_url")
-    errors = []
-    if pr_url and not branch:
-        errors.append("pr_url: is set without branch: — a pull request cannot be "
-                      "pushed to without naming the branch it tracks")
-    if branch in DEFAULT_BRANCHES:
-        errors.append(f"branch: is {branch} — that commits to the default branch "
-                      "instead of chaining onto work in flight")
-    return errors
 
 
 def state_errors(item: Path) -> list[str]:
@@ -196,9 +153,7 @@ def _gist_of(root: Path, state: str, spec: str, question: str,
     if state == "blocked":
         return _question_gist(question)
     if state == "inbox":
-        unmet = [d for d in deps_of(spec)
-                 if not ((root / "deliverables" / d).is_dir()
-                         or (root / "archive" / d).is_dir())]
+        unmet = unmet_deps(root, spec)
         if unmet:
             return "waiting on: " + ", ".join(unmet)
     return ""
