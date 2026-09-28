@@ -455,7 +455,9 @@ every change to it is committed, so the commit can be the readback.
     the one-line title; under `### Body`, exactly one four-backtick fence
     holding the whole body. Four, because a body carries three-backtick
     fences and `##` headings of its own.
-    `<PLUGIN_HOME>/board/pr_text.py extract` must exit 0 on READY.md.
+    `pr_text.py` here and in step 12 means
+    `python3 <PLUGIN_HOME>/board/pr_text.py`; its
+    `extract READY.md --title-out <f> --body-out <f>` must exit 0.
     When ship will not run `gh pr create` (a `pr_url` in the spec, or in
     an earlier round's DELIVERABLE.md), that text is a
     **full replacement** of the open pull request's title and body. Read
@@ -496,14 +498,15 @@ every change to it is committed, so the commit can be the readback.
       run, and ship applies READY.md's prepared text, as it stands after
       any repair pass, as a full replacement of the pull request's title
       and body. Before pushing, write the title and body into the item's
-      `evidence/` with `<PLUGIN_HOME>/board/pr_text.py extract`, and compare
+      `evidence/` with `pr_text.py extract` (step 11), and compare
       READY.md's `pr_text_base` (printed by `pr_text.py base`) with
       `gh pr view <pr_url> --json title,body | pr_text.py digest`. Any
       failure, or a mismatch, moves the item to `blocked/` with the mismatch
       as the question: the live text changed since READY.md read it. Then
       push, then run
-      `gh pr edit <pr_url> --title "<title>" --body-file <body>` with no
-      other flag, then read back `gh pr view <pr_url> --json title,body`
+      `gh pr edit <pr_url> --title "$(cat <title file>)" --body-file <body>`
+      with no other flag, the title read from its file and never retyped,
+      then read back `gh pr view <pr_url> --json title,body`
       through `pr_text.py verify <title file> <body file>`. An edit that is
       denied or fails, or a verify that does not exit 0, moves the item to
       `blocked/` with QUESTION.md naming the pushed head sha and the

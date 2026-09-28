@@ -39,7 +39,7 @@ You know the target repo's rules better than the executor did — prove it.
    it against the pull request's whole range of commits
    (`gh pr view <pr_url> --json commits`), and treat an addendum, an
    instruction to append, text conditional on another item's text, or an
-   omitted commit as material.
+   omitted commit as material. The diff itself stays `<base>...HEAD`.
    A chained spec is therefore reviewed on **its own delta**: everything the
    base branch already carried is base, not diff. Know what that costs you.
    A defect that emerges only from the *combination* of several chained
