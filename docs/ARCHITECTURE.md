@@ -197,9 +197,13 @@ whole arrangement:
 
 The reviewer is adversarial on purpose. Its instruction is to try to reject the
 work, and a `ship` verdict has to say what it tried and failed to break. It
-also carries a **round cap of 2**: work that survives two fix rounds without
-shipping becomes a `flag` regardless, because a third mechanical round is
-usually a sign the spec was wrong, not the code.
+also carries a **round cap of 2** fix rounds per run, and the cap governs
+judgement only: a finding that still needs judgement after two fix rounds
+becomes a `flag`, because a third round is usually a sign the spec was wrong,
+not the code. A finding the reviewer tags *mechanical* — a verbatim
+replacement plus an executable check, applicable without rewriting a commit —
+goes through the mechanical repair pass, then ships, and is never by itself
+the reason a human is called.
 
 Its powers are narrow by construction — it writes `REVIEW.md` and nothing else.
 It never edits the worktree, the spec, or `READY.md`, and it never opens a pull
