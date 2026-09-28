@@ -102,7 +102,7 @@ latest version always wins.
      the WORKTREE: `cd <STATE_HOME> && claude --bg --model <review model>
      --permission-mode <permission-mode> "Review <STATE_HOME>/specs/active/<id>
      (worktree <path>) per <PLUGIN_HOME>/contracts/REVIEWER.md. Round <N>."`
-     — N = 1 + fix rounds so far. Do not notify; keep the worktree.
+     — N = fix rounds completed in this run. Do not notify; keep the worktree.
      **A session that is still live does not hold review up.** `READY.md`
      present, `git -C <path> status --porcelain` empty, and `HEAD` unchanged
      across a 5-minute window → stop the executor session and dispatch the
@@ -121,10 +121,25 @@ latest version always wins.
      dispatch the reviewer; the item goes to `blocked/`.
    - `REVIEW.md` verdict appeared → act per DISPATCH step 12:
      **fix** → dispatch a fix executor in the SAME worktree against the
-     findings (round cap 2; archive the round's REVIEW.md as
-     `REVIEW-r<N>.md`); **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
+     findings (archive the round's REVIEW.md as `REVIEW-r<M>.md`, M = its
+     item-level `review:`, so names cannot collide across runs; a
+     REVIEW.md with no `review:` key is pre-change provenance);
+     **fix** with `cap_retire: true` → run the mechanical repair pass
+     (DISPATCH step 12a–12d), then ship as below — a failed pass flags;
+     the reviewer prompt's `Round <N>` and REVIEW.md's `round:` are one
+     value, fix rounds completed in the current run. Round cap 2 fix
+     rounds per run: a run begins at dispatch from `inbox/` and ends at
+     `ship` or `archive`; an `inbox/` re-queue after a `flag` starts a new
+     run (`round` resets to 0); a re-dispatch after a dispatch failure
+     with the deliverable byte-unchanged is the same round retried
+     (neither advances nor resets); the repair pass is not a fix round.
+     At the cap, any `judgement` finding → the reviewer flags; all
+     `mechanical` → `cap_retire: true`.
+     **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
      with the findings as the question, notify with the unblock command;
-     **ship** → open the draft PR (`gh pr create --draft`, title/body
+     **ship** → any `mechanical` finding outstanding first goes through
+     the repair pass (DISPATCH step 12a); then open the draft PR
+     (`gh pr create --draft`, title/body
      verbatim from READY.md), push to the target repo's remote — **unless
      the item declares a `pr_url`**, and then the push is the whole of it
      and `gh pr create` does not run — per DISPATCH step 12; move to

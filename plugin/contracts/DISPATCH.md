@@ -390,10 +390,22 @@ running loop, so fix it here first.
     **on the worktree/branch** — `git diff` against base, not a PR. Verdicts:
     - **fix** → a fix executor runs in the SAME worktree against
       `REVIEW.md`'s findings (criteria = parent's + one check per finding),
-      then back to step 10. Round cap 2, then flag.
+      then back to step 10 for the next review. Round cap 2 fix rounds per
+      run, per REVIEWER.md's *Hard limits*: a run begins at dispatch from
+      `inbox/` and ends at `ship` or `archive`; an `inbox/` re-queue after
+      a `flag` starts a new run and resets `round` to 0; a re-dispatch
+      after a dispatch failure with the deliverable byte-unchanged is the
+      same round retried; the repair pass is not a fix round. At the cap,
+      any `judgement` finding left → the reviewer flags.
+    - **fix** with `cap_retire: true` (at the cap, every remaining finding
+      `mechanical`) → the mechanical repair pass below, then **ship**.
     - **flag** → `<STATE_HOME>/specs/blocked/<id>/` with REVIEW.md findings as
       the question. The human decides before any PR exists.
-    - **ship** → NOW the draft PR is opened (`gh pr create --draft`, title +
+    - **ship** → any `mechanical` finding outstanding, whatever its
+      `surface`, first goes through the repair pass below. With only
+      `judgement` findings left, DELIVERABLE.md's accepted-at-ship list
+      records each with its `surface` tag.
+      NOW the draft PR is opened (`gh pr create --draft`, title +
       body verbatim from READY.md), branch pushed to the TARGET repo's
       remote. **Unless the item declares a `pr_url`** (spec frontmatter, or
       DELIVERABLE.md from an earlier round): then the push is the whole of
@@ -407,6 +419,39 @@ running loop, so fix it here first.
       `pr_url:`/`report_url:`); prune the worktree. The PR lands already
       reviewed and fixed. PR state is later read back per recorded URL,
       never by scanning the target repo's PR list.
+
+    **The mechanical repair pass** — one procedure, serving both exits
+    above. It verifies; it raises no findings of its own, and it runs at
+    most once per run.
+
+    **12a — Apply.** A fix executor runs in the SAME worktree and applies
+    each `mechanical` finding's verbatim replacement — and nothing else.
+    It may not repair anything absent from `REVIEW.md`.
+
+    **12b — Verify.** The orchestrator runs each finding's check block
+    verbatim, capturing stdout, stderr and exit status to
+    `<STATE_HOME>/specs/active/<id>/evidence/repair-pass/`.
+
+    **12c — Prove scope**, by what was edited. It never rewrites a commit
+    — no amend, rebase, reset, squash or force-push, whether or not the
+    remote carries the commit yet:
+    - any file in the diff → the repair lands as one new commit whose
+      parent is the reviewed `HEAD` (`git rev-parse HEAD^` equals the sha
+      the reviewer reviewed), that file's acceptance criteria re-run, and
+      the push that follows is a fast-forward — into a declared `pr_url`
+      too, whose `headRefOid` must be an ancestor of the new `HEAD`;
+    - `READY.md` only → `git rev-parse HEAD` unchanged (no commit touched).
+
+    A defect in an existing commit's message cannot be repaired without a
+    rewrite, so it is never `mechanical` (REVIEWER.md); it routes as a
+    `ship-facing` `judgement` finding and reaches the human in
+    `DELIVERABLE.md`'s accepted-at-ship list.
+
+    **12d — Route.** Every check passes and every scope proof holds →
+    continue to the verdict's normal destination, listing every applied
+    edit and its evidence path in `DELIVERABLE.md`. Any check fails, any
+    scope proof moves, or any finding proves not to be mechanical →
+    **flag**, with the pass's evidence as the question.
 13. Commit the move in `<STATE_HOME>`'s own git repo — never pushed, it has
     no remote. Notify per the orchestrator's Notifications policy
     (`PushNotification`; a manual dispatch just reports in-chat).

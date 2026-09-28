@@ -211,8 +211,10 @@ it prevents is expensive.
   repo's PR list.
 - **Executors never speak on the PR.** A comment needing an answer becomes a *drafted* reply you
   post or rewrite. Every word on the PR is yours.
-- **Round cap 2.** Work that survives two fix rounds without shipping needs a human, not a third
-  robot — the verdict becomes `flag` regardless.
+- **Round cap 2.** Judgement that survives two fix rounds needs a human, not a third robot — those
+  findings become a `flag`. A finding the reviewer tagged mechanical — a verbatim replacement plus
+  an executable check, applicable without rewriting a commit — goes through the repair pass, then
+  ships.
 - **Deterministic FIFO.** The inbox is ordered lexicographically by id, never by mtime, because
   moves and edits reset mtime.
 - **Bounded concurrency.** Two executions at a time, one relaunch per spec, and a heartbeat file
