@@ -108,7 +108,7 @@ latest version always wins.
      the WORKTREE: `cd <STATE_HOME> && claude --bg --model <review model>
      --permission-mode <permission-mode> "Review <STATE_HOME>/specs/active/<id>
      (worktree <path>) per <PLUGIN_HOME>/contracts/REVIEWER.md. Round <N>."`
-     — N = 1 + fix rounds so far. Do not notify; keep the worktree.
+     — N = fix rounds completed in this run. Do not notify; keep the worktree.
      **A session that is still live does not hold review up.** `READY.md`
      present, `git -C <path> status --porcelain` empty, and `HEAD` unchanged
      across a 5-minute window → stop the executor session and dispatch the
@@ -127,10 +127,25 @@ latest version always wins.
      dispatch the reviewer; the item goes to `blocked/`.
    - `REVIEW.md` verdict appeared → act per DISPATCH step 12:
      **fix** → dispatch a fix executor in the SAME worktree against the
-     findings (round cap 2; archive the round's REVIEW.md as
-     `REVIEW-r<N>.md`); **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
+     findings (archive the round's REVIEW.md as `REVIEW-r<M>.md`, M = its
+     item-level `review:`, so names cannot collide across runs; a
+     REVIEW.md with no `review:` key is pre-change provenance);
+     **fix** with `cap_retire: true` → run the mechanical repair pass
+     (DISPATCH step 12a–12d), then ship as below — a failed pass flags;
+     the reviewer prompt's `Round <N>` and REVIEW.md's `round:` are one
+     value, fix rounds completed in the current run. Round cap 2 fix
+     rounds per run: a run begins at dispatch from `inbox/` and ends at
+     `ship` or `archive`; an `inbox/` re-queue after a `flag` starts a new
+     run (`round` resets to 0); a re-dispatch after a dispatch failure
+     with the deliverable byte-unchanged is the same round retried
+     (neither advances nor resets); the repair pass is not a fix round.
+     At the cap, any `judgement` finding → the reviewer flags; all
+     `mechanical` → `cap_retire: true`.
+     **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
      with the findings as the question, notify with the unblock command;
-     **ship** → open the draft PR (`gh pr create --draft`, title/body
+     **ship** → any `mechanical` finding outstanding first goes through
+     the repair pass (DISPATCH step 12a); then open the draft PR
+     (`gh pr create --draft`, title/body
      verbatim from READY.md), push to the target repo's remote — **unless
      the item declares a `pr_url`**, and then the push is the whole of it
      and `gh pr create` does not run — per DISPATCH step 12; move to
@@ -343,6 +358,31 @@ unreviewed mutation against live infrastructure is not.
   never for dispatch starts or progress. Use the `PushNotification` tool.
 - If the human types into this session, answer from verified queue state,
   then resume the loop.
+- **The orchestrator is a session too.** DISPATCH.md's `## Every session`
+  section binds every command a tick runs, not only those on ticks that
+  dispatch. Every queue move, rename or delete that a tick report states
+  was asserted on disk first. Once per tick, before acting on any item, run
+  `python3 <PLUGIN_HOME>/board/server.py check --root <STATE_HOME>`. An
+  `active/` item it names moves to `blocked/` with the `check` line as its
+  question, appended under a `## Orchestrator —` heading if it already
+  holds a `QUESTION.md`, and is not otherwise acted on. An item it names
+  in any other state goes in the tick report and never gates the tick.
+- **Finished work is never destroyed.** An item in `active/` is finished
+  when it holds `READY.md`, or a `QUESTION.md` that is open by the test in
+  *Active*'s dispatch-failure bullet (the one beginning "Executor died
+  without moving state"), arm (i). Every recovery action checks this
+  first: relaunch, rescue branch, branch reset, the budget stop-and-block,
+  the second-death block, the "Needs input" capture, worktree prune, and
+  any recovery action added later. A finished item's session may be
+  stopped and its transition completed (`READY.md` → review; an open
+  `QUESTION.md` → `blocked/`). It is never rescued, reset or relaunched.
+  Its `READY.md` and `QUESTION.md` are never replaced or deleted by a
+  recovery action: what the orchestrator has to add is appended under a
+  heading beginning `## Orchestrator —`, followed by the reason and the
+  date. Worktree prune never passes `--force`; a `git worktree remove`
+  that refuses a dirty tree goes in the tick report and is not retried.
+  The ordering holds both ways: a completion path never waits for a
+  recovery action, and a recovery action never acts on a finished item.
 
 ## Tick pacing (dynamic loop)
 

@@ -112,13 +112,20 @@ class ContractRefsTest(unittest.TestCase):
         self.assertEqual([int(n) for n in STEP_RE.findall(text)], list(range(1, 18)))
 
     def test_dispatch_sub_steps_are_inline_labels(self):
-        # 8a/8b/8c are bold labels inside step 8, each exactly once, and never
-        # promoted to headings -- a heading would reshape step 8 without any
-        # citation noticing.
+        # 8a/8b/8c and 12a-12d are bold labels inside steps 8 and 12, each
+        # exactly once, and never promoted to headings -- a heading would
+        # reshape the step without any citation noticing.
         text = (PLUGIN / "contracts/DISPATCH.md").read_text()
-        for label in ("**8a — ", "**8b — ", "**8c — "):
+        labels = [f"**{n}{x} — " for n, xs in ((8, "abc"), (12, "abcd")) for x in xs]
+        for label in labels:
             self.assertEqual(text.count(label), 1, label)
-        self.assertEqual(re.findall(r"^#+\s*8[a-z].*$", text, re.M), [])
+        self.assertEqual(re.findall(r"^#+\s*(?:8|12)[a-z].*$", text, re.M), [])
+
+    def test_repair_pass_labels_sit_inside_step_12(self):
+        text = (PLUGIN / "contracts/DISPATCH.md").read_text()
+        step12 = re.search(r"^12\. .*?(?=^13\. )", text, re.M | re.S).group(0)
+        for x in "abcd":
+            self.assertIn(f"**12{x} — ", step12)
 
 
 class DanglingFixtureTest(unittest.TestCase):

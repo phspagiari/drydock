@@ -13,6 +13,58 @@ running loop, so fix it here first.
 > pushable anywhere, by design. `<namespace>` is the branch namespace read
 > from `<STATE_HOME>/config` (set at `/drydock:install`).
 
+## Every session — no prompts, verified effects
+
+Every session drydock starts runs in the background, with nobody to answer
+a prompt, and this section binds each of them: the plan, implement and
+single-phase executors, a relaunch, the comment-fix executor, the diff
+reviewer, the plan gate, the retro and the orchestrator itself.
+
+- **Never run a command that can block on a prompt.** Write the
+  non-interactive form explicitly: `rm -f`, `cp -f`, `mv -f`,
+  `git commit -m` or `-F` (never bare `git commit`), and `git --no-pager`
+  or `PAGER=cat` wherever a pager can start. Assume `rm`, `cp` and `mv`
+  are aliased to their `-i` forms whatever you typed: the alias is
+  expanded before your flags are read.
+- **Before any move, rename or copy, assert the destination does not
+  exist**, file or directory, whether the verb is `mv`, `cp` or `git mv`.
+  `mv -f` and `cp -f` are the forms to write only once that assertion has
+  passed: `-f` suppresses the prompt, and the prompt was the only thing
+  protecting an existing destination. If it exists, stop and report it,
+  or escalate; never overwrite it. `mv -f` onto an existing file replaces
+  it and exits 0, and the post-state check below cannot tell, since the
+  source is absent and the destination present exactly as after a clean
+  rename. Under the alias, BSD `cp -f` onto an existing file still
+  prompts, as `-f` does not cancel `-i` there.
+- **Never pipe a long-running producer into a truncating consumer**
+  (`| head`): the consumer exits and the producer blocks on the closed
+  pipe. Redirect to a file, then read the file.
+- **A reported effect is a verified effect.** Before reporting a mutation,
+  assert its post-state: the path is absent, present, or in the named
+  directory. Exit 0 is not evidence. An `-i` alias with no TTY reads EOF
+  as "no", changes nothing and exits 0, so the command that did nothing
+  and the command that worked report the same status.
+
+**`<STATE_HOME>` changes through git's verbs.** It is a git repository and
+every change to it is committed, so the commit can be the readback.
+
+- Move or rename a tracked file or directory with `git mv`, and delete one
+  with `git rm`. Remove an untracked file with `rm -f`, then assert it is
+  absent.
+- Rename an untracked file, such as a review file just written and not
+  yet committed, with `mv -f`: `git mv` refuses an untracked source and
+  exits 128. Assert the destination absent first, then assert the source
+  absent and the destination present.
+- The destination assertion is not optional for `git mv` either. `git mv`
+  into an existing directory nests the source inside it and exits 0, and
+  a queue move is a directory move. It refuses an existing destination
+  only when that destination is a file.
+- Wherever a contract says to archive `X` as `Y`, that is a rename: `X`
+  stops existing. A copy leaves a stale `X` that reads as current.
+- After committing, read the commit's own `--stat`
+  (`git --no-pager show --stat HEAD`). An intended deletion or rename that
+  the stat does not show is a failed change, not a clean one.
+
 ## Preflight (fail closed — abort loudly on any miss)
 
 1. Spec exists in `<STATE_HOME>/specs/inbox/<id>/SPEC.md`; frontmatter parses;
@@ -267,8 +319,10 @@ running loop, so fix it here first.
    to this target repo), `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md`
    if it exists (the priors the repo has moved past — stale priors are
    still advice; weigh them knowing the repo has moved), the spec, and the
-   repo in this worktree. Write
-   `<STATE_HOME>/specs/active/<id>/PLAN.md` from
+   repo in this worktree.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   Write `<STATE_HOME>/specs/active/<id>/PLAN.md` from
    `<PLUGIN_HOME>/templates/plan-template.md` — `## Tasks` is mandatory —
    as your LAST act, or to a temporary name renamed into place: its
    presence tells the orchestrator you are done. Do not modify the
@@ -302,7 +356,10 @@ running loop, so fix it here first.
    if it exists, `<STATE_HOME>/specs/active/<id>/PRIORS-STALE.md` if it
    exists — stale priors are still advice; weigh them knowing the repo has
    moved — and `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 —
-   they govern how you verify, get ready, and escalate. The plan session's
+   they govern how you verify, get ready, and escalate.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   The plan session's
    transcript is not available to you and must not be reconstructed:
    PLAN.md is the whole handoff, and what it does not say you read from the
    repo or escalate. Work `## Tasks` in `After`-order: run each row's
@@ -321,7 +378,10 @@ running loop, so fix it here first.
    `<STATE_HOME>/PRIORS.md` (lessons from prior runs) and
    `<STATE_HOME>/priors/<slug>.md` if it exists (the lessons specific to this
    target repo), then `<PLUGIN_HOME>/contracts/DISPATCH.md` steps 9–11 — they
-   govern how you verify, get ready, and escalate. You do NOT open a PR —
+   govern how you verify, get ready, and escalate.
+   Before running any command, also read the `## Every session` section
+   of `<PLUGIN_HOME>/contracts/DISPATCH.md`; it binds this session.
+   You do NOT open a PR —
    ever. Follow the spec exactly: respect Non-goals and blast radius, stop on
    any escalation condition and write QUESTION.md instead of guessing. Work
    plan-first: execute the spec's requirements in order and verify each before
@@ -398,10 +458,22 @@ running loop, so fix it here first.
     **on the worktree/branch** — `git diff` against base, not a PR. Verdicts:
     - **fix** → a fix executor runs in the SAME worktree against
       `REVIEW.md`'s findings (criteria = parent's + one check per finding),
-      then back to step 10. Round cap 2, then flag.
+      then back to step 10 for the next review. Round cap 2 fix rounds per
+      run, per REVIEWER.md's *Hard limits*: a run begins at dispatch from
+      `inbox/` and ends at `ship` or `archive`; an `inbox/` re-queue after
+      a `flag` starts a new run and resets `round` to 0; a re-dispatch
+      after a dispatch failure with the deliverable byte-unchanged is the
+      same round retried; the repair pass is not a fix round. At the cap,
+      any `judgement` finding left → the reviewer flags.
+    - **fix** with `cap_retire: true` (at the cap, every remaining finding
+      `mechanical`) → the mechanical repair pass below, then **ship**.
     - **flag** → `<STATE_HOME>/specs/blocked/<id>/` with REVIEW.md findings as
       the question. The human decides before any PR exists.
-    - **ship** → NOW the draft PR is opened (`gh pr create --draft`, title +
+    - **ship** → any `mechanical` finding outstanding, whatever its
+      `surface`, first goes through the repair pass below. With only
+      `judgement` findings left, DELIVERABLE.md's accepted-at-ship list
+      records each with its `surface` tag.
+      NOW the draft PR is opened (`gh pr create --draft`, title +
       body verbatim from READY.md), branch pushed to the TARGET repo's
       remote. **Unless the item declares a `pr_url`** (spec frontmatter, or
       DELIVERABLE.md from an earlier round): then the push is the whole of
@@ -415,6 +487,39 @@ running loop, so fix it here first.
       `pr_url:`/`report_url:`); prune the worktree. The PR lands already
       reviewed and fixed. PR state is later read back per recorded URL,
       never by scanning the target repo's PR list.
+
+    **The mechanical repair pass** — one procedure, serving both exits
+    above. It verifies; it raises no findings of its own, and it runs at
+    most once per run.
+
+    **12a — Apply.** A fix executor runs in the SAME worktree and applies
+    each `mechanical` finding's verbatim replacement — and nothing else.
+    It may not repair anything absent from `REVIEW.md`.
+
+    **12b — Verify.** The orchestrator runs each finding's check block
+    verbatim, capturing stdout, stderr and exit status to
+    `<STATE_HOME>/specs/active/<id>/evidence/repair-pass/`.
+
+    **12c — Prove scope**, by what was edited. It never rewrites a commit
+    — no amend, rebase, reset, squash or force-push, whether or not the
+    remote carries the commit yet:
+    - any file in the diff → the repair lands as one new commit whose
+      parent is the reviewed `HEAD` (`git rev-parse HEAD^` equals the sha
+      the reviewer reviewed), that file's acceptance criteria re-run, and
+      the push that follows is a fast-forward — into a declared `pr_url`
+      too, whose `headRefOid` must be an ancestor of the new `HEAD`;
+    - `READY.md` only → `git rev-parse HEAD` unchanged (no commit touched).
+
+    A defect in an existing commit's message cannot be repaired without a
+    rewrite, so it is never `mechanical` (REVIEWER.md); it routes as a
+    `ship-facing` `judgement` finding and reaches the human in
+    `DELIVERABLE.md`'s accepted-at-ship list.
+
+    **12d — Route.** Every check passes and every scope proof holds →
+    continue to the verdict's normal destination, listing every applied
+    edit and its evidence path in `DELIVERABLE.md`. Any check fails, any
+    scope proof moves, or any finding proves not to be mechanical →
+    **flag**, with the pass's evidence as the question.
 13. Commit the move in `<STATE_HOME>`'s own git repo — never pushed, it has
     no remote. Notify per the orchestrator's Notifications policy
     (`PushNotification`; a manual dispatch just reports in-chat).
@@ -423,6 +528,18 @@ running loop, so fix it here first.
 
 14. Approve → `gh pr ready <url>` (draft → ready for the team's normal
     review) or publish the report; move to `<STATE_HOME>/archive/<id>/`.
+    **Unless the pull request is shared**: the item's spec frontmatter
+    declares a `pr_url` (it pushed into a pull request it did not open —
+    step 12), or another item's spec frontmatter declares this item's
+    `pr_url` as the one it chains onto. Then `gh pr ready` does not run and
+    the pull request is left exactly as it is; the item is still archived.
+    Approving an item says this increment is good; readiness belongs to the
+    pull request, and only the human knows when every item sharing it has
+    landed. Marking it ready is then a separate human action — drydock never
+    takes it, at any point. DELIVERABLE.md's `pr_url:` does not decide this:
+    step 12 records one for every pull request it ships, chained or not.
+    Nor can a spec nobody has written yet: the item that opened a pull
+    request reads as unshared until a later spec declares it.
 
     **Propagation — a landed diff re-checks the priors it touches.** It
     runs only once a `pr` deliverable's pull request has *merged*: a merge
