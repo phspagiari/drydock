@@ -87,8 +87,18 @@ every change to it is committed, so the commit can be the readback.
    does not block itself. `queue_rules.py check` (item 1) evaluates it —
    never a substring count: exit `1` with a `marker:` line → move to
    `<STATE_HOME>/specs/blocked/<id>/` with `QUESTION.md`; do not execute.
-3. Every acceptance-criterion command is runnable from the worktree (tools
-   exist, credentials fresh — re-authenticate now, not mid-run).
+3. Every acceptance-criterion command is runnable from the worktree
+   **before any pull request exists** (tools exist, credentials fresh —
+   re-authenticate now, not mid-run). A criterion that needs a pull
+   request, a merge, a deploy or a human is not an acceptance criterion:
+   it belongs in the spec's Ship criteria table, which the executor carries
+   forward unevaluated (step 11).
+   **3a — Lint.** Run
+   `python3 <PLUGIN_HOME>/board/speccheck.py <STATE_HOME>/specs/inbox/<id>/SPEC.md`.
+   Any non-zero exit fails preflight (fail closed): move the spec to
+   `<STATE_HOME>/specs/blocked/<id>/` with `QUESTION.md` naming every rule
+   id it printed (or its parse error), and do not execute. Its stderr
+   warnings do not block.
 4. `target_repo` clean enough to branch from its default branch.
 5. **Fresh base, always**: `git -C <target_repo> fetch origin`, then update
    the local default branch — `git -C <target_repo> pull --ff-only origin
@@ -409,6 +419,18 @@ every change to it is committed, so the commit can be the readback.
 9. Executor runs all acceptance criteria itself, saving raw output under
    `<STATE_HOME>/specs/active/<id>/evidence/`. Failures get up to
    `max_criteria_retries` fix attempts, then escalate.
+   A criterion that reads a drydock artifact runs again **after**
+   `READY.md` is written, not only before, because writing the report
+   changes the file the criterion reads (`R5-S5`, `R6-S7`: a whole-file
+   count of `READY.md` rose from `0` to `3` on the report's own text, one
+   round after the same failure). Every extraction's boundary assertion —
+   line count, first line, last line — is saved under `evidence/` beside
+   the criterion's own output. A sample that is absent or empty, or a
+   command that exited non-zero, makes that criterion **indeterminate**:
+   RUN.md reports it as such, it never counts as a pass, and indeterminate
+   after `max_criteria_retries` escalates like a failure (a rejected
+   pattern's empty fallback nearly shipped as "no such claim", and two
+   empty samples compared equal as a stalled transcript).
 
 ## Ready — the zero-calls gate (no PR exists yet)
 
@@ -468,6 +490,10 @@ every change to it is committed, so the commit can be the readback.
     item's commits land, not this item's delta: never an addendum, an
     instruction to append, or text conditional on another item's text
     having landed.
+    READY.md also reproduces the spec's Ship criteria table as declared —
+    unevaluated, labelled as the ship step's, and outside
+    `## Prepared PR text` — so a criterion moved out of the acceptance gate
+    is handed forward rather than lost.
     The executor stops here.
 
 ## Review → fix → land (orchestrator-driven; still no PR until ship)
