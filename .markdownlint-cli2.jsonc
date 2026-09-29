@@ -18,6 +18,11 @@
     // cross-reference in the contract set.
     "MD029": false,
 
+    // Duplicate headings. CHANGELOG.md repeats Added / Changed / Fixed under
+    // every version, which is what Keep a Changelog prescribes; only
+    // siblings under the same parent need to be unique.
+    "MD024": { "siblings_only": true },
+
     // Table pipe alignment. The spec template and the model-routing table are
     // aligned for reading in a plain editor, which is where specs get written;
     // MD060 wants a single canonical spacing style across the repo and would
