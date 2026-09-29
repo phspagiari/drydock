@@ -119,6 +119,12 @@ class R2(unittest.TestCase):
         self.assertEqual(rules(spec(row("AC-1", "`git merge-base a b; gh pr view`"))),
                          ["R2"])
 
+    def test_R2_pre_pr_runnable_ignores_a_pr_slug_tail(self):
+        """R2-pre-pr-runnable: the lower-case -pr tail of a slug is not a pull request."""
+        text = spec(row("AC-1", "`cat notes/2026-01-01-retry-upload-pr.md`",
+                        "count at least 1"))
+        self.assertEqual(rules(text), [])
+
     def test_R2_pre_pr_runnable_does_not_scan_ci_ship_or_review(self):
         """R2-pre-pr-runnable: bare CI, ship and review are not tokens."""
         text = spec(row("AC-1", "`uvx ruff check`", "CI's pinned version; Ship "
@@ -187,7 +193,7 @@ class R5(unittest.TestCase):
     def test_R5_artifact_read_is_scoped_fires_on_a_whole_file_read(self):
         """R5-artifact-read-is-scoped: each artifact read whole fires."""
         for name in ("READY.md", "RUN.md", "DELIVERABLE.md", "QUESTION.md",
-                     "REVIEW-r2.md"):
+                     "REVIEW.md", "REVIEW-r2.md"):
             with self.subTest(name=name):
                 text = spec(row("AC-1", f"`grep -c x {name}`", "count at least 1"))
                 self.assertEqual(rules(text), ["R5"])
@@ -204,8 +210,8 @@ class R5(unittest.TestCase):
         self.assertEqual(len(speccheck.R5_SCOPES), 3)
 
     def test_R5_artifact_read_is_scoped_ignores_other_markdown(self):
-        """R5-artifact-read-is-scoped: README.md and SPEC.md are not artifacts."""
-        self.assertEqual(rules(spec(row("AC-1", "`grep -c x README.md SPEC.md`",
+        """R5-artifact-read-is-scoped: README, SPEC and the REVIEWER contract are not artifacts."""
+        self.assertEqual(rules(spec(row("AC-1", "`grep -c x README.md SPEC.md REVIEWER.md`",
                                         "count at least 1"))), [])
 
 

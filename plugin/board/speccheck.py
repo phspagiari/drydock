@@ -100,9 +100,11 @@ HARD_RULES = frozenset({"R1", "R4", "R8", "R11"})
 #: Bare ``CI``, ``ship`` and ``review`` are deliberately absent: criteria
 #: legitimately name CI's pinned tool versions, the ship-criteria table and
 #: review files, and none of those presupposes a pull request.
+#: The bare abbreviation is matched upper-case only, so the ``-pr`` tail of a
+#: branch or item slug is not read as a pull request.
 R2_TOKENS = (
-    ("a pull request", re.compile(r"\bpull[ -]requests?\b|\bPRs?\b|\bgh\s+pr\b",
-                                  re.I)),
+    ("a pull request", re.compile(r"(?i:\bpull[ -]requests?\b|\bgh\s+pr\b)"
+                                  r"|\bPRs?\b")),
     ("a merge", re.compile(r"\bmerg(?:e|es|ed|ing)\b", re.I)),
     ("a deploy", re.compile(r"\bdeploy(?:s|ed|ing|ment|ments)?\b", re.I)),
     ("a human", re.compile(r"\bhumans?\b|\bmanual(?:ly)?\b|\bsign[- ]?off\b"
@@ -352,9 +354,11 @@ def r2_pre_pr_runnable(table: Table) -> list[Violation]:
     return out
 
 
-#: The drydock artifacts a criterion's own report may be written into.
+#: The drydock artifacts a criterion's own report may be written into. Review
+#: files are ``REVIEW.md`` and ``REVIEW-<suffix>.md``; the ``REVIEWER.md``
+#: contract is a repo source, not a report.
 R5_ARTIFACT_RE = re.compile(
-    r"\b(?:READY|RUN|DELIVERABLE|QUESTION)\.md\b|\bREVIEW[\w.-]*\.md\b")
+    r"\b(?:READY|RUN|DELIVERABLE|QUESTION)\.md\b|\bREVIEW(?:-[\w.-]+)?\.md\b")
 
 #: Constructs that read a region instead of a whole file: a ``sed -n`` range,
 #: an ``awk`` range or record filter, or the named-section extractor. Their
