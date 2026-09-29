@@ -240,12 +240,14 @@ cards carry the paste-ready `claude "…"` command that works them.
 Start from [`templates/spec-template.md`](plugin/templates/spec-template.md); read
 [`examples/example-spec.md`](plugin/examples/example-spec.md) for every section filled the way it
 should be. The sections are Context, Goal, Non-goals, Constraints & blast radius, Requirements,
-Acceptance criteria, Escalation conditions, and Assumptions.
+Acceptance criteria, Ship criteria, Escalation conditions, and Assumptions.
 
 **Acceptance criteria are the gate, and the section newcomers under-fill.** Each one is a command
 plus the result that counts as a pass. The eligibility test is blunt: if you cannot write every
 criterion as a command runnable without you, the work is not drydock-eligible yet — name the
-verifier that is missing and keep the work interactive. "Tests pass" alone is rarely enough; at
+verifier that is missing and keep the work interactive. A check that needs a pull request, a
+merge, a deploy or a human goes in the Ship criteria table instead: the executor carries it
+forward unevaluated, and it does not make the work ineligible. "Tests pass" alone is rarely enough; at
 least one criterion has to encode the feature's actual intent rather than compilation health.
 
 Gaps become `[NEEDS CLARIFICATION: …]` markers rather than invented answers. Any marker still

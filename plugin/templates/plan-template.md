@@ -46,7 +46,10 @@ mechanism, which layer, which existing helper — and why that one.]
             Every FR in the spec maps to at least one row.
   - Files:  the subset of ## Files this row touches.
   - Verify: a command that runs from the worktree and proves the row —
-            not "looks right", not "review the diff".
+            not "looks right", not "review the diff". The cell carries at
+            least one backtick code span; speccheck enforces it as
+            R1-command-is-a-command (see spec-template.md's
+            acceptance-criteria comment).
   - After:  ids this row depends on, or — for none.
 -->
 
