@@ -34,7 +34,12 @@ You know the target repo's rules better than the executor did — prove it.
    for a spec that chained onto an existing branch is not the default branch
    — and the target repo's default branch when there is not. Judge the
    prepared PR title/body in READY.md against the repo's conventions too —
-   that text ships verbatim.
+   that text ships verbatim. For an item that declares a `pr_url`, it ships
+   as a full replacement of the open pull request's title and body: judge
+   it against the pull request's whole range of commits
+   (`gh pr view <pr_url> --json commits`), and treat an addendum, an
+   instruction to append, text conditional on another item's text, or an
+   omitted commit as material. The diff itself stays `<base>...HEAD`.
    A chained spec is therefore reviewed on **its own delta**: everything the
    base branch already carried is base, not diff. Know what that costs you.
    A defect that emerges only from the *combination* of several chained

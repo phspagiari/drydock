@@ -450,6 +450,24 @@ every change to it is committed, so the commit can be the readback.
     commit-guideline docs / CLAUDE.md, and recently merged human-authored
     PRs as exemplars. No spec ids, drydock paths, or drydock terminology in
     PR content or commits. Conventions undeterminable → escalation.
+    A `pr` item's prepared text is READY.md's `## Prepared PR text`
+    section: under `### Title`, exactly one four-backtick fence holding
+    the one-line title; under `### Body`, exactly one four-backtick fence
+    holding the whole body. Four, because a body carries three-backtick
+    fences and `##` headings of its own.
+    `pr_text.py` here and in step 12 means
+    `python3 <PLUGIN_HOME>/board/pr_text.py`; its
+    `extract READY.md --title-out <f> --body-out <f>` must exit 0.
+    When ship will not run `gh pr create` (a `pr_url` in the spec, or in
+    an earlier round's DELIVERABLE.md), that text is a
+    **full replacement** of the open pull request's title and body. Read
+    `gh pr view <pr_url> --json title,body,commits`, pipe that output
+    through `pr_text.py digest`, and write `pr_text_base: <digest>` on its
+    own line at the top of the section, before `### Title`. Start from the
+    live text and describe every commit the pull request carries once this
+    item's commits land, not this item's delta: never an addendum, an
+    instruction to append, or text conditional on another item's text
+    having landed.
     The executor stops here.
 
 ## Review → fix → land (orchestrator-driven; still no PR until ship)
@@ -476,11 +494,28 @@ every change to it is committed, so the commit can be the readback.
       NOW the draft PR is opened (`gh pr create --draft`, title +
       body verbatim from READY.md), branch pushed to the TARGET repo's
       remote. **Unless the item declares a `pr_url`** (spec frontmatter, or
-      DELIVERABLE.md from an earlier round): then the push is the whole of
-      it, `gh pr create` does not run, and DELIVERABLE.md records that same
-      `pr_url:`. A declared pull request that preflight (step 5) could not
-      confirm OPEN on the declared branch never gets this far — it escalated
-      — and opening a fresh PR in its place is forbidden, not a fallback.
+      DELIVERABLE.md from an earlier round): then `gh pr create` does not
+      run, and ship applies READY.md's prepared text, as it stands after
+      any repair pass, as a full replacement of the pull request's title
+      and body. Before pushing, write the title and body into the item's
+      `evidence/` with `pr_text.py extract` (step 11), and compare
+      READY.md's `pr_text_base` (printed by `pr_text.py base`) with
+      `gh pr view <pr_url> --json title,body | pr_text.py digest`. Any
+      failure, or a mismatch, moves the item to `blocked/` with the mismatch
+      as the question: the live text changed since READY.md read it. Then
+      push, then run
+      `gh pr edit <pr_url> --title "$(cat <title file>)" --body-file <body>`
+      with no other flag, the title read from its file and never retyped,
+      then read back `gh pr view <pr_url> --json title,body`
+      through `pr_text.py verify <title file> <body file>`. An edit that is
+      denied or fails, or a verify that does not exit 0, moves the item to
+      `blocked/` with QUESTION.md naming the pushed head sha and the
+      unapplied text. The push has landed, so it is never retried as an
+      append and never "fixed" with a new PR. DELIVERABLE.md records that
+      same `pr_url:`, and `pr_text_sha256:`, the read-back's digest.
+      A declared pull request that preflight (step 5) could not confirm
+      OPEN on the declared branch never gets this far — it escalated — and
+      opening a fresh PR in its place is forbidden, not a fallback.
       Move `<STATE_HOME>/specs/active/<id>/` →
       `<STATE_HOME>/deliverables/<id>/` with `DELIVERABLE.md` (what was
       built, criteria + evidence, assumptions, frontmatter
