@@ -31,7 +31,8 @@ annotation in the comment block directly beneath the Acceptance table::
     a ``verbatim:<name>`` block that exists.
 ``R5-artifact-read-is-scoped``
     A Command naming ``READY.md``, ``RUN.md``, ``DELIVERABLE.md``,
-    ``QUESTION.md`` or ``REVIEW*.md`` reads a region, not the whole file.
+    ``QUESTION.md`` or ``REVIEW*.md`` reads a region, not the whole file:
+    a range (``R5_SCOPES``), not a single-pattern filter.
 ``R6-extraction-asserted``
     A Command that extracts a region asserts its line count, or the row
     names another row that does.
@@ -360,12 +361,30 @@ def r2_pre_pr_runnable(table: Table) -> list[Violation]:
 R5_ARTIFACT_RE = re.compile(
     r"\b(?:READY|RUN|DELIVERABLE|QUESTION)\.md\b|\bREVIEW(?:-[\w.-]+)?\.md\b")
 
-#: Constructs that read a region instead of a whole file: a ``sed -n`` range,
-#: an ``awk`` range or record filter, or the named-section extractor. Their
-#: output redirected into a file is the extract a later grep reads.
+_ADDR = r"(?:\d+|\$|/(?:[^/\\]|\\.)*/)"
+
+#: Constructs that read a region instead of a whole file, and their output
+#: redirected into a file is the extract a later grep reads:
+#:
+#: - a ``sed -n`` script opening with an address pair (``'/a/,/b/p'``,
+#:   ``'1,20p'``, ``'/a/,$p'``);
+#: - an ``awk`` program holding two addresses joined by a comma
+#:   (``'/a/,/b/'``), a flag or counter an action sets and a later pattern
+#:   tests (``'/a/{f=1} f'``, ``'/^```/{n++; next} n==1'``), or an ``NR``
+#:   comparison (``'NR>3'``);
+#: - the named-section extractor.
+#:
+#: A single-pattern filter (``sed -n '/x/p'``, ``awk '/x/'``) visits every
+#: line of the file -- it is ``grep`` spelled differently -- so it is no
+#: scope.
 R5_SCOPES = (
-    re.compile(r"\bsed\s+-n\b"),
-    re.compile(r"\bawk\b(?:\s+-\S+)*\s+['\"][^'\"]*(?:/[^/]+/|\bNR\b)"),
+    re.compile(rf"\bsed\s+(?:-[a-zA-Z]+\s+)*?-[a-zA-Z]*n[a-zA-Z]*\s+"
+               rf"(?:-[a-zA-Z]+\s+)*['\"]?\s*{_ADDR}\s*,\s*(?:{_ADDR}|[+~]\d+)"),
+    re.compile(r"\bawk\b[^'\"]*(['\"])(?:(?!\1).)*?"
+               r"(?:/(?:[^/\\]|\\.)*/\s*,\s*/(?:[^/\\]|\\.)*/"
+               r"|\{[^}]*\b([A-Za-z_]\w*)\s*(?:=\s*\d+|\+\+)[^}]*\}"
+               r"(?:(?!\1).)*?(?<![\w$])\2\s*(?:&&|\|\||[<>!=]=|[<>]|\{|\1)"
+               r"|\bNR\s*(?:[<>]=?|[!=]=)\s*\d|\d\s*(?:[<>]=?|[!=]=)\s*NR\b)"),
     re.compile(r"\bpr_text\.py\s+extract\b"),
 )
 

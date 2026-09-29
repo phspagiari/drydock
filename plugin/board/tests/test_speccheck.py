@@ -201,13 +201,30 @@ class R5(unittest.TestCase):
     def test_R5_artifact_read_is_scoped_accepts_each_scope(self):
         """R5-artifact-read-is-scoped: every R5_SCOPES construct passes."""
         for command in ("`sed -n '/^## A/,/^## B/p' READY.md > e.txt; wc -l < e.txt`",
+                        "`sed -n '/^## Log/,$p' RUN.md > e.txt; wc -l < e.txt`",
+                        "`sed -n 5,20p RUN.md > e.txt; wc -l < e.txt`",
+                        "`sed -nE -e '/^## A/,+3p' RUN.md > e.txt; wc -l < e.txt`",
                         "`awk '/^## A/{f=1} f' RUN.md > e.txt; wc -l < e.txt`",
+                        "`awk '/^## A/,/^## B/' RUN.md > e.txt; wc -l < e.txt`",
+                        "`awk '/^## A/{f=1} /^## B/{f=0} !f' RUN.md > e.txt; wc -l < e.txt`",
+                        "`awk '/^~~~/{n++; next} n==1' READY.md > e.txt; wc -l < e.txt`",
                         "`awk 'NR>3' RUN.md > e.txt; wc -l < e.txt`",
                         "`pr_text.py extract READY.md > e.txt; wc -l < e.txt`"):
             with self.subTest(command=command):
                 self.assertEqual(rules(spec(row("AC-1", command, "count at least 1"))),
                                  [])
         self.assertEqual(len(speccheck.R5_SCOPES), 3)
+
+    def test_R5_artifact_read_is_scoped_fires_on_a_single_pattern_filter(self):
+        """R5-artifact-read-is-scoped: a sed -n or awk filter reads the whole file, so it fires."""
+        for command in ("`awk '/retry budget/' READY.md \\| wc -l`",
+                        "`sed -n '/retry budget/p' READY.md \\| wc -l`",
+                        "`sed -n 's/^x \\(.*\\)/\\1/p' READY.md \\| wc -l`",
+                        "`awk '{print $1,$2}' READY.md \\| wc -l`",
+                        "`awk '/x/{c++} END{print c}' READY.md`"):
+            with self.subTest(command=command):
+                self.assertEqual(rules(spec(row("AC-1", command, "count at least 1"))),
+                                 ["R5"])
 
     def test_R5_artifact_read_is_scoped_ignores_other_markdown(self):
         """R5-artifact-read-is-scoped: README, SPEC and the REVIEWER contract are not artifacts."""
