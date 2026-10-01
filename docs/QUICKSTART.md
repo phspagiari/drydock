@@ -117,6 +117,11 @@ pass, runnable without you. If you cannot write them that way, this work is not
 drydock-eligible yet — the honest answer is to name the missing verifier and
 keep the work interactive.
 
+A check that only makes sense once a pull request exists — CI green, a merge, a
+deploy, a human's sign-off — is not an acceptance criterion. It goes in the
+spec's Ship criteria table, which the executor carries forward unevaluated, so
+it no longer makes the work ineligible.
+
 A criteria table that will actually hold:
 
 ```markdown

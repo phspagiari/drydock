@@ -78,6 +78,13 @@ they do today.
     not fit, that is an escalation, not a refactor.
   - Any migration directory. This change adds no columns and no tables.
   - Any other endpoint's handler or test.
+- **State predicates**:
+  - `idempotency_records` rows (FR-002, FR-003, FR-004) — written by the
+    existing helper when a keyed request first completes (FR-001). The
+    handler reads them through the helper and never writes them directly.
+  - The base commit (AC-7's comparison run) — `<base_sha>`, the commit the
+    worktree was cut from, not `origin/main`, which may have moved since
+    and would attribute someone else's lint findings to this change.
 - The existing helper's semantics are the contract: same key + same body hash
   → replay; same key + different body hash → `409 Conflict` with error code
   `idempotency_key_reuse`. Do not invent different semantics for this
@@ -93,8 +100,9 @@ they do today.
   executes the transfer as today and records `(key, request_body_hash,
   status_code, response_body)` via the existing helper before responding.
 - **FR-002**: When the key has been seen within 24h and the request body hash
-  matches, the handler returns the recorded status and body verbatim, creates
-  no ledger entry, and sets `Idempotency-Replayed: true` on the response.
+  matches, the handler returns the recorded status and body byte-for-byte,
+  creates no ledger entry, and sets `Idempotency-Replayed: true` on the
+  response.
 - **FR-003**: When the key has been seen within 24h and the body hash differs,
   the handler returns `409` with error code `idempotency_key_reuse` and
   creates no ledger entry.
@@ -120,9 +128,16 @@ they do today.
 | AC-6 | Spec document matches behaviour | `make openapi-lint && go test -run TestOpenAPIContract ./internal/transport/http/...` | exit 0 — the contract test reads the YAML, so a description that lies fails here |
 | AC-7 | Lint clean for the diff | `make lint` | exit 0, or only findings that reproduce on the base commit (record both runs under `evidence/`) |
 
+## Ship criteria (owned by the ship step — NOT the executor)
+
+| # | Check | Command | Pass condition |
+|---|-------|---------|----------------|
+| SC-1 | CI green | the repo's required checks on this change's pull request | all green, including the integration suite that needs the shared Postgres |
+
 ## Escalation conditions
 
-- Any unresolved `[NEEDS CLARIFICATION]` at execution time.
+- Any unresolved clarification marker (see the spec template's header for
+  its form) at execution time.
 - Any acceptance criterion still failing after `max_criteria_retries`.
 - The correct change appears to require touching the **must not touch** list —
   in particular, if `internal/adapters/postgres/idempotency.go` cannot be

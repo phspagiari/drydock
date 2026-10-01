@@ -27,7 +27,10 @@ the discussion phase by writing `<STATE_HOME>/specs/inbox/<id>/SPEC.md` from
 - **The eligibility test is the acceptance criteria.** If you cannot write
   every criterion as a command + pass condition runnable without the human,
   say this work is not drydock-eligible yet and name the verifier that is
-  missing. Do not write a spec with vibes-based criteria.
+  missing. Do not write a spec with vibes-based criteria. A criterion that
+  needs a pull request, a merge, a deploy or a human does not make the work
+  ineligible: it goes in the Ship criteria table, which the ship step owns
+  and the executor never evaluates.
 
 ## Procedure
 
@@ -41,8 +44,8 @@ the discussion phase by writing `<STATE_HOME>/specs/inbox/<id>/SPEC.md` from
    directory is a pre-split one — read it whole; `/drydock:install` migrates
    it.
 2. Re-read the session and draft, in order: Goal, Non-goals, Constraints &
-   blast radius, Requirements, Acceptance criteria, Escalation additions,
-   Assumptions. Pull Context pointers as paths/links, not prose.
+   blast radius, Requirements, Acceptance criteria, Ship criteria,
+   Escalation additions, Assumptions. Pull Context pointers as paths/links, not prose.
 3. Show the two sections that gate everything — **Acceptance criteria** and
    **Assumptions** — in chat for confirmation before writing the file. (The
    rest is reviewed in the file itself.)
@@ -52,6 +55,11 @@ the discussion phase by writing `<STATE_HOME>/specs/inbox/<id>/SPEC.md` from
    `depends_on` — if this work builds on another spec's outcome, list that
    id; the orchestrator won't dispatch it until the dependency has shipped.
    Ask when ordering seems to matter and nobody has said.
+   Before step 5, write the draft to a scratch path and run
+   `python3 <PLUGIN_HOME>/board/speccheck.py <draft>`. Fix every rule it
+   names, or waive a waivable one beneath its table with the reason;
+   `DISPATCH.md` step 3 runs the same check at preflight and blocks the
+   spec on any hit.
 5. Write `<STATE_HOME>/specs/inbox/<id>/SPEC.md`. Commit in `<STATE_HOME>`
    (never pushed — it has no remote): `spec: <id>`.
 6. Report: spec id, dispatch state (dispatchable, or blocked on N
