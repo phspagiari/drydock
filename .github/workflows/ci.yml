@@ -46,7 +46,7 @@ jobs:
       # Pinned: markdownlint ships new rules in minor releases, and a new rule
       # landing on a Tuesday should not fail an unrelated pull request.
       - name: markdownlint
-        uses: DavidAnson/markdownlint-cli2-action@v24.2.0
+        uses: DavidAnson/markdownlint-cli2-action@v25.0.0
 
       - name: actionlint
         env:
