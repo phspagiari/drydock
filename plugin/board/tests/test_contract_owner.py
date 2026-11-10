@@ -86,6 +86,34 @@ class RoutingBlockTest(unittest.TestCase):
                        "`owner <name> unreachable (<reason>); notified human`"):
             self.assertIn(phrase, fallback[0], phrase)
 
+    def test_a_send_with_no_inbox_for_notices_is_not_confirmed(self):
+        # Beyond the spec's first definition of a confirmed delivery, by amendment.
+        (fallback,) = [i for i in self.items if "[Cross-session delivery notice]" in i]
+        for phrase in ("A send is delivered only when it succeeded and no such notice "
+                       "arrived before the tick ends",
+                       "no inbox for a notice to reach is not confirmed",
+                       "`no delivery notices`"):
+            self.assertIn(phrase, fallback, phrase)
+
+    def test_owner_must_be_listed_by_exact_name_and_route_runs_each_event(self):
+        (owner,) = [i for i in self.items if i.startswith("`owner<TAB><name>`")]
+        self.assertIn("a `ListAgents` row whose name is exactly `<name>`", owner)
+        (run,) = [i for i in self.items if i.startswith("Run `python3")]
+        self.assertIn("Run it at every event", run)
+
+    def test_every_site_names_a_token_and_borrows_text_when_it_quotes_none(self):
+        self.assertNotIn("names its token and its text", self.flat)
+        self.assertIn("A site that quotes no text of its own uses the text another "
+                      "site quotes for the same token", self.flat)
+
+    def test_untokened_notifications_stay_with_the_human(self):
+        m = re.search(r"A notification these contracts ask for without a token.*?"
+                      r"whatever the spec's `owner`\.", self.flat)
+        self.assertTrue(m, "no rule for notifications without a token")
+        for phrase in ("`eligible`", '"comments addressed"', "is not routed",
+                       "to the human by the `PushNotification` tool"):
+            self.assertIn(phrase, m.group(0), phrase)
+
     def test_routing_falls_back_when_route_fails(self):
         failed = [i for i in self.items if "non-zero exit" in i]
         self.assertEqual(len(failed), 1)
@@ -190,8 +218,13 @@ class PermissionsTest(unittest.TestCase):
     def test_permissions_name_the_owner_session_mode(self):
         section = flat(h2_section(read("contracts/ORCHESTRATOR.md"), "## Permissions"))
         self.assertTrue(section)
-        for phrase in ("owner", "`<permission-mode>`", "held for", "falls back to the human"):
+        for phrase in ("owner", "`<permission-mode>`", "held for", "falls back to the human",
+                       "runs in the permission mode this loop's own session runs in",
+                       "the config line sets the mode of the sessions this loop launches, "
+                       "not of the loop"):
             self.assertIn(phrase, section, phrase)
+        # The launch mode is not the owner's mode unless the loop runs in it.
+        self.assertNotIn("session runs in `<permission-mode>` too", section)
 
 
 class UnblockLoopTest(unittest.TestCase):
@@ -210,13 +243,15 @@ class UnblockLoopTest(unittest.TestCase):
     def test_owner_may_decide_and_otherwise_stays_blocked(self):
         text = flat(self.unblock)
         for phrase in ("the human, or", "`owner:`", "leaves the item in `blocked/`",
-                       "outside drydock"):
+                       "outside drydock", "2. Discuss until the decider decides."):
             self.assertIn(phrase, text, phrase)
+        self.assertNotIn("Discuss until the human decides", text)
 
     def test_hard_limits_names_the_unblock_loop(self):
         limits = flat(h2_section(read("contracts/ORCHESTRATOR.md"), "## Hard limits"))
         self.assertIn("specs change only via the unblock loop (the human, or the spec's "
-                      "`owner` when set)", limits)
+                      "`owner` when set) and the human's fast rejection in the review pass",
+                      limits)
         self.assertNotIn("human's review loop", limits)
 
 
