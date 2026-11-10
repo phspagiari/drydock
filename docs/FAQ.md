@@ -69,9 +69,9 @@ Where it goes, in rough order:
 - **Per-item retros** are one short session per ship.
 
 The controls are in the spec's `budget` block (`max_agents`, `max_wall_clock`,
-`max_criteria_retries`), the hard cap of two concurrent executions, the review
-round cap of 2, and the model routing table in
-[`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md) — which exists so `report`
+`max_criteria_retries`), the cap on concurrent executions (`max_concurrent` in
+`<STATE_HOME>/config`, default 2), the review round cap of 2, and the model
+routing table in [`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md) — which exists so `report`
 work does not run on a code-tier model.
 
 The thing that actually blows a budget is not the loop; it is a spec whose

@@ -43,9 +43,16 @@ latest version always wins.
    `<STATE_HOME>/archive/`, and that CLI is the rule's implementation: never
    parse `depends_on` yourself. Report a `WAITING` line as "waiting on
    <ids>", which is a normal state, not an error. A non-zero exit skips
-   dispatch this tick and notifies — there is no hand-parsed fallback. For
-   each `ELIGIBLE` spec, in order, while fewer than **2** executions are
-   active:
+   dispatch this tick and notifies — there is no hand-parsed fallback.
+   Capacity is what
+   `python3 <PLUGIN_HOME>/board/queue_rules.py slots --root <STATE_HOME>`
+   prints: one line, `<free>`, `<cap>` and `<active>` tab-separated, the cap
+   being `max_concurrent` in `<STATE_HOME>/config`. That CLI is the cap's
+   implementation: never count `active/` or read the cap yourself. A non-zero
+   exit from `slots` skips dispatch this tick and notifies, exactly like a
+   non-zero `eligible`. For each `ELIGIBLE` spec, in order, while `slots`
+   reports `free > 0` — re-run it after each dispatch, which adds a directory
+   to `active/`:
    - Run the DISPATCH preflight (fail closed). `queue_rules.py check`
      reports a `marker:` line → move to `<STATE_HOME>/specs/blocked/<id>/`
      with `QUESTION.md`, commit (in `<STATE_HOME>`, never pushed), notify
@@ -348,7 +355,9 @@ unreviewed mutation against live infrastructure is not.
 
 ## Hard limits
 
-- Max 2 concurrent executions; max 1 relaunch per spec; never edit a SPEC.md
+- Concurrent executions are capped at `max_concurrent` from
+  `<STATE_HOME>/config` (default 2 when the key is absent), as the Inbox
+  step's `slots` reports it; max 1 relaunch per spec; never edit a SPEC.md
   (specs change only via the human's review loop).
 - Every standing rule your environment enforces applies to you and to every
   executor you dispatch. If your setup restricts infrastructure verbs,

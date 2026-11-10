@@ -58,7 +58,14 @@ land in the same write. Create `<STATE_HOME>/config`:
 ```yaml
 namespace: <handle>
 permission_mode: bypassPermissions   # or acceptEdits, per step 6
+max_concurrent: 2                    # executions in specs/active/ at once
 ```
+
+`max_concurrent` is written only into a config this step creates. On a
+re-run against an existing `<STATE_HOME>/config`, never rewrite, add or
+remove its `max_concurrent:` line: a config without one already means 2,
+and a value already there is the one they chose. `queue_rules.py slots` is
+what reads it.
 
 This file is why nothing about your setup ever needs editing inside the
 plugin's own contracts — those are shared, versioned, and updated out from

@@ -3,6 +3,7 @@
 
     python3 <PLUGIN_HOME>/board/queue_rules.py eligible [--root <STATE_HOME>]
     python3 <PLUGIN_HOME>/board/queue_rules.py check <SPEC.md> [<SPEC.md>...]
+    python3 <PLUGIN_HOME>/board/queue_rules.py slots [--root <STATE_HOME>]
 
 ``eligible`` prints one tab-separated line per ``specs/inbox/<id>/SPEC.md``,
 ids in lexicographic order::
@@ -26,6 +27,14 @@ code blocks, HTML comments and inline code spans. The bare bracketed words, an
 empty body, and any mention inside code or a comment are not markers, so a
 spec that describes the convention does not block itself. ``MARKER_RE`` spells
 the space as ``[ ]`` so this file never matches a plain substring search.
+
+``slots`` prints one line, ``<free><TAB><cap><TAB><active>``: ``active`` is
+the number of directories directly under ``<root>/specs/active/`` whose name
+does not start with ``.``, ``cap`` is the ``max_concurrent:`` value in
+``<root>/config`` (2 when the file or the key is absent) and ``free`` is
+``max(0, cap - active)``. Exit 0; exit 2 with nothing on stdout when the root
+or its ``specs/active`` is not a directory, or when ``max_concurrent`` is not
+a positive integer, is empty, or appears more than once.
 
 The board (``server.py``) imports the parsers from here; this module imports
 ``server`` only inside :func:`main`, for the STATE_HOME default.
@@ -107,6 +116,71 @@ def chain_errors(spec: str) -> list[str]:
         errors.append(f"branch: is {branch} — that commits to the default branch "
                       "instead of chaining onto work in flight")
     return errors
+
+
+# --------------------------------------------------------------------------
+# concurrency cap
+# --------------------------------------------------------------------------
+
+#: The cap when ``<STATE_HOME>/config`` or its ``max_concurrent:`` line is absent.
+DEFAULT_MAX_CONCURRENT = 2
+
+#: Every ``max_concurrent:`` line, value up to the end of the line -- possibly
+#: empty. Not :func:`field`: its ``(.+?)`` needs a non-empty value, so an empty
+#: one would read as absent and fall through to the default.
+MAX_CONCURRENT_RE = re.compile(r"^[ \t]*max_concurrent:(.*)$", re.M)
+
+
+class SlotsError(Exception):
+    """Why ``slots`` cannot answer: a missing directory or a bad ``max_concurrent``."""
+
+
+def max_concurrent(config: str | None) -> int:
+    """The concurrency cap from ``config`` text; ``None`` is a missing file.
+
+    A missing file or key is :data:`DEFAULT_MAX_CONCURRENT`. A present value,
+    inline ``#`` comment and surrounding whitespace stripped, must be a
+    positive decimal integer with no leading zero; anything else, an empty
+    value, or a second line raises :class:`SlotsError`. No upper bound is
+    imposed here; a value too long for ``int()`` to parse is a
+    :class:`SlotsError` too, never a traceback.
+    """
+    lines = MAX_CONCURRENT_RE.findall(config or "")
+    if not lines:
+        return DEFAULT_MAX_CONCURRENT
+    if len(lines) > 1:
+        raise SlotsError(f"max_concurrent: appears {len(lines)} times in config")
+    value = lines[0].split("#")[0].strip()
+    if not re.fullmatch(r"[1-9][0-9]*", value):
+        raise SlotsError(f"max_concurrent: {value!r} is not a positive integer")
+    try:
+        return int(value)
+    except ValueError:  # longer than the interpreter's int-from-string limit
+        raise SlotsError(f"max_concurrent: a {len(value)}-digit value is too long to "
+                         "read") from None
+
+
+def slots(root: Path) -> tuple[int, int, int]:
+    """``(free, cap, active)`` for the STATE_HOME at ``root``, counted now.
+
+    Raises :class:`SlotsError` when ``root`` or ``specs/active`` is not a
+    directory, or when ``config`` is unreadable or its cap is invalid.
+    """
+    active_dir = root / "specs" / "active"
+    for path in (root, active_dir):
+        if not path.is_dir():
+            raise SlotsError(f"not a directory: {path}")
+    config_path = root / "config"
+    try:
+        config = config_path.read_text(errors="replace")
+    except FileNotFoundError:
+        config = None
+    except OSError as exc:
+        raise SlotsError(f"cannot read {config_path}: {exc.strerror or exc}") from exc
+    cap = max_concurrent(config)
+    active = sum(1 for d in active_dir.iterdir()
+                 if d.is_dir() and not d.name.startswith("."))
+    return max(0, cap - active), cap, active
 
 
 # --------------------------------------------------------------------------
@@ -222,12 +296,25 @@ def main(argv: list[str] | None = None) -> int:
                       help="drydock STATE_HOME (default: $DRYDOCK_STATE_HOME or ~/.drydock)")
     check = commands.add_parser("check", help="clarification markers and chain errors")
     check.add_argument("paths", nargs="+", metavar="SPEC.md")
+    slot = commands.add_parser("slots", help="free, cap and active execution counts")
+    slot.add_argument("--root", type=Path, default=None,
+                      help="drydock STATE_HOME (default: $DRYDOCK_STATE_HOME or ~/.drydock)")
     args = parser.parse_args(argv)
 
+    if args.command in ("eligible", "slots") and args.root is None:
+        import server  # only for the default; server imports this module
+        args.root = server.default_root()
+
+    if args.command == "slots":
+        try:
+            free, cap, active = slots(args.root)
+        except SlotsError as exc:
+            print(f"queue_rules: {exc}", file=sys.stderr)
+            return 2
+        print(f"{free}\t{cap}\t{active}")
+        return 0
+
     if args.command == "eligible":
-        if args.root is None:
-            import server  # only for the default; server imports this module
-            args.root = server.default_root()
         inbox = args.root / "specs" / "inbox"
         if not inbox.is_dir():
             print(f"queue_rules: not a directory: {inbox}", file=sys.stderr)

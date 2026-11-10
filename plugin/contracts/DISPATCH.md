@@ -276,7 +276,8 @@ every change to it is committed, so the commit can be the readback.
    concurrently.** Git allows one worktree per branch, so the second
    `git worktree add <path> <branch>` dies with exit 128 (`fatal: '<branch>'
    is already used by worktree at …`) — a raw git error, not a drydock
-   escalation — and the orchestrator runs up to 2 executions at once. For a
+   escalation — and the orchestrator runs several executions at once, up to
+   `max_concurrent`. For a
    series, which is the only reason chaining exists, a `depends_on` edge
    between consecutive members that share a branch is therefore a
    **correctness requirement, not a convention**; they must be serialised.
