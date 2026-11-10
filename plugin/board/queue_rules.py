@@ -141,7 +141,9 @@ def max_concurrent(config: str | None) -> int:
     A missing file or key is :data:`DEFAULT_MAX_CONCURRENT`. A present value,
     inline ``#`` comment and surrounding whitespace stripped, must be a
     positive decimal integer with no leading zero; anything else, an empty
-    value, or a second line raises :class:`SlotsError`. No upper bound.
+    value, or a second line raises :class:`SlotsError`. No upper bound is
+    imposed here; a value too long for ``int()`` to parse is a
+    :class:`SlotsError` too, never a traceback.
     """
     lines = MAX_CONCURRENT_RE.findall(config or "")
     if not lines:
@@ -151,7 +153,11 @@ def max_concurrent(config: str | None) -> int:
     value = lines[0].split("#")[0].strip()
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise SlotsError(f"max_concurrent: {value!r} is not a positive integer")
-    return int(value)
+    try:
+        return int(value)
+    except ValueError:  # longer than the interpreter's int-from-string limit
+        raise SlotsError(f"max_concurrent: a {len(value)}-digit value is too long to "
+                         "read") from None
 
 
 def slots(root: Path) -> tuple[int, int, int]:

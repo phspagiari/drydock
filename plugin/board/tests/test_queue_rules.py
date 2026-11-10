@@ -164,6 +164,14 @@ class TestEligibleCli(QueueTestCase):
         self.assertEqual(cli["beta-2"], ["never-a", "never-b"])
 
 
+def too_many_digits(case: unittest.TestCase) -> int:
+    """One digit past ``int()``'s string limit; skips where there is no limit."""
+    limit = getattr(sys, "get_int_max_str_digits", lambda: 0)()
+    if not limit:
+        case.skipTest("this interpreter has no int-from-string digit limit")
+    return limit + 1
+
+
 class SlotsTestCase(QueueTestCase):
     """``specs/active/`` exists; ``active(n)`` drops n item dirs, ``config()`` the file."""
 
@@ -183,7 +191,7 @@ class SlotsTestCase(QueueTestCase):
 
 
 class TestMaxConcurrent(unittest.TestCase):
-    """FR-002: the cap is the ``max_concurrent:`` line, default 2, fail closed."""
+    """The cap is the ``max_concurrent:`` line, default 2, fail closed."""
 
     def test_missing_file_means_2(self):
         self.assertEqual(queue_rules.max_concurrent(None), 2)
@@ -192,7 +200,7 @@ class TestMaxConcurrent(unittest.TestCase):
         self.assertEqual(queue_rules.max_concurrent("namespace: t\npermission_mode: x\n"), 2)
 
     def test_value_with_inline_comment_and_whitespace(self):
-        text = "namespace: t\nmax_concurrent:   10   # ramp 2 -> 5 -> 10\n"
+        text = "namespace: t\nmax_concurrent:   10   # set by hand\n"
         self.assertEqual(queue_rules.max_concurrent(text), 10)
 
     def test_no_upper_bound(self):
@@ -229,13 +237,13 @@ class TestMaxConcurrent(unittest.TestCase):
 
 
 class TestSlotsCli(SlotsTestCase):
-    """FR-001: ``<free>\\t<cap>\\t<active>``, exit 0; exit 2 and no stdout otherwise."""
+    """``<free>\\t<cap>\\t<active>``, exit 0; exit 2 and no stdout otherwise."""
 
     def test_counts_dirs_only_and_skips_hidden(self):
         self.active(9)
         (self.root / "specs/active/.hidden").mkdir()
         write(self.root / "specs/active/loose-file", "not an item\n")
-        self.config("namespace: t\nmax_concurrent: 10   # ramp\n")
+        self.config("namespace: t\nmax_concurrent: 10   # note\n")
         self.assertEqual(self.slots(), (0, "1\t10\t9\n", ""))
 
     def test_default_cap_without_config(self):
@@ -265,6 +273,18 @@ class TestSlotsCli(SlotsTestCase):
                 rc, out, err = self.slots()
                 self.assertEqual((rc, out), (2, ""))
                 self.assertIn("max_concurrent", err)
+
+    def test_value_too_long_to_parse_exits_2(self):
+        # Matches the pattern, but int() refuses strings past the interpreter's
+        # digit limit; that must be a refusal, not a traceback and exit 1.
+        # Run as the loop does, so an escaped exception shows as exit 1, not an ERROR.
+        self.active(1)
+        self.config(f"max_concurrent: {'9' * too_many_digits(self)}\n")
+        done = subprocess.run([sys.executable, str(SCRIPT), "slots", "--root", str(self.root)],
+                              capture_output=True, text=True, check=False)
+        self.assertEqual((done.returncode, done.stdout), (2, ""), done.stderr[-300:])
+        self.assertIn("too long", done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
 
     def test_config_that_is_a_directory_exits_2(self):
         (self.root / "config").mkdir()
@@ -300,12 +320,12 @@ class TestSlotsCli(SlotsTestCase):
 
 
 class TestBoardSlots(SlotsTestCase):
-    """FR-006: the board's ``active <n>/<cap>`` comes from the same function."""
+    """The board's ``active <n>/<cap>`` comes from the same function."""
 
     def test_board_and_cli_agree(self):
         self.active(4)
         (self.root / "specs/active/.hidden").mkdir()
-        self.config("max_concurrent: 6  # ramp\n")
+        self.config("max_concurrent: 6  # note\n")
         _, out, _ = self.slots()
         free, cap, active = (int(v) for v in out.split("\t"))
         self.assertEqual(server.scan(self.root)["slots"],
@@ -317,6 +337,15 @@ class TestBoardSlots(SlotsTestCase):
         state = server.scan(self.root)["slots"]
         self.assertEqual(set(state), {"error"})
         self.assertIn("max_concurrent", state["error"])
+
+    def test_board_survives_a_value_too_long_to_parse(self):
+        self.config(f"max_concurrent: {'9' * too_many_digits(self)}\n")
+        try:
+            state = server.scan(self.root)["slots"]
+        except Exception as exc:  # the defect: scan() itself raising
+            self.fail(f"scan() raised {type(exc).__name__}: {str(exc)[:120]}")
+        self.assertEqual(set(state), {"error"})
+        self.assertIn("too long", state["error"])
 
     def test_board_survives_a_missing_active_dir(self):
         (self.root / "specs" / "active").rmdir()

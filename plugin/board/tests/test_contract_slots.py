@@ -6,15 +6,23 @@ The cap is ``max_concurrent`` in ``<STATE_HOME>/config`` and is computed in one
 place, ``queue_rules.slots``. Two prose gates apply it -- ORCHESTRATOR.md's
 Inbox step and the dispatch skill's step 1 -- and both used to restate it as a
 number, which is exactly the copy that drifts when the value moves into
-config. These tests require each gate to run the CLI and to carry no number of
-its own; the Hard limits line must name the key, not a count, and so must the
-clause in DISPATCH.md step 7 that explains why chained specs collide. Extraction
-is anchored on content and proves it found the region before judging it.
+config. These tests require each gate to run the CLI and to carry none of the
+count phrasings in ``NUMERIC_CAP``. That is a list, so a count worded another
+way passes it. Two clauses are short enough for a stricter rule: the one that
+opens Hard limits, and the one in DISPATCH.md step 7 that explains why chained
+specs collide. Each must name the key and hold no number at all, the stated
+default aside. Extraction is anchored on content and proves it found the
+region before judging it.
 """
 
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import queue_rules  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 ORCHESTRATOR = ROOT / "plugin" / "contracts" / "ORCHESTRATOR.md"
@@ -36,6 +44,18 @@ NUMERIC_CAP = [
     rf"\b(?:a|the) {_ORD}\b",
 ]
 
+#: Any word that states a count, for a clause that must hold none. Wider than
+#: ``_NUM``, which only has to recognise the phrasings the old prose used. "at
+#: once" is not a count and "once" is not in the list.
+_ANY_NUMBER = (r"(?:\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven"
+               r"|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen"
+               r"|twenty|thirty|forty|fifty|hundred|dozen|couple|pair|both|single|twice"
+               r"|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)")
+
+#: The one number the Hard limits cap clause may hold, already normalised: the
+#: default, and it is the code's.
+DEFAULT_CLAUSE = f"(default {queue_rules.DEFAULT_MAX_CONCURRENT} when the key is absent)"
+
 
 class ExtractionError(AssertionError):
     """A content anchor matched nothing, or matched the wrong region."""
@@ -52,6 +72,11 @@ def numeric_caps(section: str) -> list[str]:
     return [m.group(0) for p in NUMERIC_CAP for m in re.finditer(p, text)]
 
 
+def numbers(clause: str) -> list[str]:
+    """Every number in a clause, digits or a word: for a clause that should hold none."""
+    return re.findall(rf"\b{_ANY_NUMBER}\b", normalise(clause))
+
+
 def orchestrator_inbox(text: str) -> str:
     match = re.search(r"^1\. \*\*Inbox\*\*.*?(?=^2\. )", text, re.M | re.S)
     if not match or "ELIGIBLE" not in match.group(0):
@@ -64,6 +89,14 @@ def orchestrator_hard_limits(text: str) -> str:
     if not match or "relaunch" not in match.group(1):
         raise ExtractionError("no '## Hard limits' section with the relaunch cap")
     return match.group(1)
+
+
+def hard_limits_cap_clause(text: str) -> str:
+    """The clause that opens Hard limits, up to its first ``;``: the concurrency cap."""
+    clause = normalise(orchestrator_hard_limits(text)).split(";")[0]
+    if "execution" not in clause:
+        raise ExtractionError("Hard limits does not open with the cap on executions")
+    return clause
 
 
 def dispatch_step_1(text: str) -> str:
@@ -111,18 +144,18 @@ class TestGatesRunSlots(unittest.TestCase):
         text = normalise(orchestrator_inbox(ORCHESTRATOR.read_text()))
         self.assertRegex(text, r"free > 0")
         self.assertRegex(text, r"re-run[^.]{0,80}after each dispatch")
-        self.assertRegex(text, r"non-zero exit from slots")
+        self.assertRegex(text, r"non-zero exit from slots skips dispatch this tick and notifies")
 
     def test_hard_limits_name_the_key_not_a_count(self):
-        text = normalise(orchestrator_hard_limits(ORCHESTRATOR.read_text()))
-        self.assertIn("max_concurrent", text)
-        self.assertIn("<state_home>/config", text)
-        self.assertNotRegex(text, rf"max {_NUM} concurrent")
+        clause = hard_limits_cap_clause(ORCHESTRATOR.read_text())
+        self.assertIn("max_concurrent from <state_home>/config", clause)
+        self.assertIn(DEFAULT_CLAUSE, clause)
+        self.assertEqual(numbers(clause.replace(DEFAULT_CLAUSE, "")), [])
 
     def test_dispatch_chained_spec_clause_names_the_key_not_a_count(self):
         clause = chained_spec_clause(DISPATCH.read_text())
         self.assertIn("max_concurrent", clause)
-        self.assertEqual(numeric_caps(clause), [])
+        self.assertEqual(numbers(clause), [])
 
 
 class TestNumericCapDetector(unittest.TestCase):
@@ -152,6 +185,13 @@ class TestNumericCapDetector(unittest.TestCase):
         self.assertNotIn("max_concurrent", clause)
         self.assertEqual(numeric_caps(clause), ["up to 2", "2 execution"])
 
+    def test_any_number_in_a_short_clause_is_caught(self):
+        self.assertEqual(numbers("capped at 2, whatever `max_concurrent` says"), ["2"])
+        self.assertEqual(numbers("Two executions at a time"), ["two"])
+        self.assertEqual(numbers("a dozen, or eleven, or both of them"),
+                         ["dozen", "eleven", "both"])
+        self.assertEqual(numbers("several executions at once, up to `max_concurrent`."), [])
+
     def test_extraction_fails_loudly_on_a_missing_anchor(self):
         with self.assertRaises(ExtractionError):
             orchestrator_inbox("# O\n\n1. **Outbox** — nothing\n2. **Active**\n")
@@ -159,6 +199,8 @@ class TestNumericCapDetector(unittest.TestCase):
             dispatch_step_1("## Argument\n\n1. x\n2. y\n")
         with self.assertRaises(ExtractionError):
             chained_spec_clause("7. Worktree, no chained-spec paragraph.\n8. Next.\n")
+        with self.assertRaises(ExtractionError):
+            hard_limits_cap_clause("## Hard limits\n\n- max 1 relaunch per spec; never edit.\n")
 
 
 if __name__ == "__main__":
