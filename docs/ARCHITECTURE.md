@@ -96,7 +96,7 @@ stateDiagram-v2
     in_review --> blocked : verdict flag
     in_review --> delivered : verdict ship<br/>gh pr create --draft
 
-    blocked --> inbox : you answer the question<br/>answer written into SPEC.md
+    blocked --> inbox : you (or the spec's owner) answer<br/>answer written into SPEC.md
 
     delivered --> active : new human comments<br/>on the PR
     delivered --> inbox : you reject (fast or slow)
@@ -112,6 +112,14 @@ stateDiagram-v2
 The three edges you drive yourself are `/drydock:spec` into the inbox,
 `/drydock:spec unblock <id>` out of `blocked`, and `/drydock:review` out of
 `deliverables`. Every other transition is the orchestrator's.
+
+A spec whose frontmatter names an `owner: <session-name>` hands two of those
+to that session. Its blocked, delivered, dispatch-failure and budget events
+reach the owner by `SendMessage` rather than reaching you, and fall back to
+you whenever the owner cannot be reached. The owner may run the unblock and
+decide it; an owner that cannot decide leaves the item in `blocked`. Every
+`## Resolution` records who decided in a `resolved_by:` line. A spec without
+`owner:` works exactly as described here.
 
 The cycle worth internalising is `active → in review → active`: a loop that
 runs entirely inside one worktree, with no pull request, no inbox round-trip,
@@ -137,8 +145,9 @@ decisions it still needs from you is zero.
 autonomous pipeline is a deliverable that is 90% right with the remaining 10%
 buried in prose. That prose gets skimmed, because a PR is a review artifact and
 reviewers read diffs, not preambles. Forcing the escalation to happen *before*
-the PR exists changes the channel: a `blocked` item is a question you answer in
-a conversation with full context, not a caveat you scroll past. And it changes
+the PR exists changes the channel: a `blocked` item is a question answered in
+a conversation with full context — by you, or by the spec's owner session when
+it names one — not a caveat you scroll past. And it changes
 the economics — answering a question costs one exchange; discovering the same
 problem in review costs a round trip through the whole pipeline.
 
@@ -175,6 +184,7 @@ truth**, and the contract says so explicitly — an orchestrator may never narra
 a status it did not verify.
 
 `QUESTION.md` also outlives the unblock. The resolution is appended to it —
+who decided (`resolved_by:` — `human`, or the spec's owner session),
 decision, rationale, options rejected and why — and the file stays in the item
 directory as history. That record is what `/drydock:retro` mines later; a
 resolution that lives only in the spec's diff has lost its reasoning.
@@ -188,9 +198,9 @@ whole arrangement:
 - **`fix` is cheap.** A fix executor runs in the same worktree against the
   reviewer's findings, and re-review is round `N+1`. No PR churn, no force-push
   history, no notification to your team, no inbox round-trip.
-- **`flag` reaches you before anyone else sees anything.** A design
-  disagreement the reviewer cannot reduce to an executable check becomes a
-  blocked item, not a PR comment thread.
+- **`flag` reaches you — or the spec's owner session — before anyone else
+  sees anything.** A design disagreement the reviewer cannot reduce to an
+  executable check becomes a blocked item, not a PR comment thread.
 - **`ship` means the PR opens already-fixed.** Title and body ship verbatim
   from `READY.md`, written to the *target* repo's conventions — discovered from
   its PR template, its contributing docs, and recently merged human PRs.
