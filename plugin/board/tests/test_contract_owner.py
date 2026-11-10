@@ -54,7 +54,7 @@ def routing_block() -> str:
 
 
 class RoutingBlockTest(unittest.TestCase):
-    """FR-005: the routing, written once in ORCHESTRATOR.md's Hard limits."""
+    """The routing, written once in ORCHESTRATOR.md's Hard limits."""
 
     def setUp(self):
         self.block = routing_block()
@@ -155,7 +155,7 @@ class RoutingBlockTest(unittest.TestCase):
 
 
 class EventSitesTest(unittest.TestCase):
-    """FR-005: every event site in ORCHESTRATOR.md names its token."""
+    """Every event site in ORCHESTRATOR.md names its token."""
 
     SITES = {'"spec blocked: <id> — <gist>"': "BLOCKED",
              '"deliverable ready: <id> — reviewed, <link>"': "DELIVERED",
@@ -187,7 +187,7 @@ class EventSitesTest(unittest.TestCase):
 
 
 class DispatchStep13Test(unittest.TestCase):
-    """FR-006: DISPATCH step 13 defers to the routing; a manual dispatch reports in-chat."""
+    """DISPATCH step 13 defers to the routing; a manual dispatch reports in-chat."""
 
     def test_step_13_defers_to_the_routing(self):
         text = read("contracts/DISPATCH.md")
@@ -201,7 +201,7 @@ class DispatchStep13Test(unittest.TestCase):
 
 
 class PreflightBlocksOnOwnerTest(unittest.TestCase):
-    """FR-004: whatever blocks on `marker:` / `chain:` lines blocks on `owner:` too."""
+    """Whatever blocks on `marker:` / `chain:` lines blocks on `owner:` too."""
 
     def test_every_check_consumer_names_owner_lines(self):
         dispatch = read("contracts/DISPATCH.md")
@@ -221,7 +221,7 @@ class PreflightBlocksOnOwnerTest(unittest.TestCase):
 
 
 class PermissionsTest(unittest.TestCase):
-    """FR-007: an owner runs in the orchestrator's permission mode."""
+    """An owner runs in the orchestrator's permission mode."""
 
     def test_permissions_name_the_owner_session_mode(self):
         section = flat(h2_section(read("contracts/ORCHESTRATOR.md"), "## Permissions"))
@@ -236,7 +236,7 @@ class PermissionsTest(unittest.TestCase):
 
 
 class UnblockLoopTest(unittest.TestCase):
-    """FR-008: the unblock decider, the resolved_by line, the Hard-limits wording."""
+    """The unblock decider, the resolved_by line, the Hard-limits wording."""
 
     def setUp(self):
         self.unblock = h2_section(read("skills/spec/SKILL.md"), "## Unblock mode")
@@ -268,7 +268,7 @@ class UnblockLoopTest(unittest.TestCase):
 
 
 class RetroCitationTest(unittest.TestCase):
-    """FR-009: a mined resolution's citation names the session that decided."""
+    """A mined resolution's citation names the session that decided."""
 
     def test_retro_cites_resolved_by(self):
         m = re.search(r"^  - `derived_from:` .*?(?=^  - `depends_on:`)",
@@ -288,7 +288,7 @@ Postgres or the existing queue table?
 
 
 class ResolvedByLivenessTest(unittest.TestCase):
-    """FR-011: a Resolution that opens with resolved_by: still closes the question."""
+    """A Resolution that opens with resolved_by: still closes the question."""
 
     def test_resolution_starting_with_resolved_by_is_resolved(self):
         resolved = QUESTION + ("\n## Resolution (2026-11-09)\n\nresolved_by: lead-a\n\n"

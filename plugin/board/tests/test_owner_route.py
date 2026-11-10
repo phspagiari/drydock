@@ -226,7 +226,7 @@ class TestRouteCli(unittest.TestCase):
                          (0, "human\n", ""))
 
     def test_indented_or_respaced_owner_is_not_an_owner_line(self):
-        # FR-002's line pattern is anchored at column 0 with the colon on the key.
+        # The owner line pattern is anchored at column 0 with the colon on the key.
         for line in ("  owner: lead-a", "owner : lead-a", "owners: lead-a", "co_owner: lead-a"):
             with self.subTest(line=line):
                 self.assertEqual(self.route(spec(line)), (0, "human\n", ""))
@@ -237,7 +237,7 @@ class TestRouteCli(unittest.TestCase):
                 self.assertEqual(self.route(spec(line)), (0, "human\n", ""))
 
     def test_comment_alone_after_the_colon_is_invalid(self):
-        # FR-002's pattern needs a non-blank value, so it captures the comment
+        # The owner line pattern needs a non-blank value, so it captures the comment
         # itself, and a comment is not a session name: fail closed.
         rc, out, _ = self.route(spec("owner:  # nobody yet"))
         self.assertEqual((rc, out), (2, ""))
