@@ -71,11 +71,19 @@ the discussion phase by writing `<STATE_HOME>/specs/inbox/<id>/SPEC.md` from
 Escalations are answered here — never in the orchestrator session (keep the
 loop thin) and never by resurrecting the executor.
 
+**Who decides.** The decider is the human, or — when `SPEC.md` names an
+`owner:` (`python3 <PLUGIN_HOME>/board/queue_rules.py route
+<STATE_HOME>/specs/blocked/<id>/SPEC.md` prints `owner<TAB><name>`) and the
+session running this unblock is that owner — the owner. A session that says
+it is the owner is taken at its word, as the human at the keyboard is. An
+owner that cannot decide leaves the item in `blocked/` and stops there,
+writing nothing: how it obtains a decision is outside drydock.
+
 1. Read `<STATE_HOME>/specs/blocked/<id>/QUESTION.md` and its `SPEC.md`. Present the
    decision: the question, the options, what was ruled out. If QUESTION.md is
    not self-contained enough to decide from, flag it — that is an
    executor-quality defect for the slow loop, in addition to answering.
-2. Discuss until the human decides. A simple call is one exchange; if the
+2. Discuss until the decider decides. A simple call is one exchange; if the
    question reveals the spec itself was wrong, treat it as a mini spec
    session and amend properly (requirements, criteria, budget — whatever the
    answer implies), not just the one marker.
@@ -83,10 +91,12 @@ loop thin) and never by resurrecting the executor.
    or amend the sections), never as a side note. The next executor sees only
    the spec.
 4. **Record the decision durably**: append a `## Resolution (YYYY-MM-DD)`
-   section to `QUESTION.md` — the decision, the rationale in one or two
-   sentences, and the options considered and rejected (with why). This is
-   what `/drydock:retro` mines; a resolution that only lives in the spec diff
-   loses the reasoning.
+   section to `QUESTION.md`. Its first line is
+   `resolved_by: <session-name | human>` — the owner's session name when the
+   owner decided, `human` when the human did; it names who decided, not who
+   typed. Then the decision, the rationale in one or two sentences, and the
+   options considered and rejected (with why). This is what `/drydock:retro`
+   mines; a resolution that only lives in the spec diff loses the reasoning.
 5. Move `<STATE_HOME>/specs/blocked/<id>/` → `<STATE_HOME>/specs/inbox/<id>/`
    (QUESTION.md stays in the directory as history), commit `unblock: <id>`
    (in `<STATE_HOME>`, never pushed). The orchestrator re-dispatches on its
@@ -94,7 +104,8 @@ loop thin) and never by resurrecting the executor.
 
 If your setup names sessions, name this one `unblock-<id>` — sessions
 launched from a board card are otherwise indistinguishable in the session
-list.
+list. An owner running the unblock in its own session keeps its own name:
+that name is what `route` sends the spec's events to.
 
 ## Anti-patterns
 

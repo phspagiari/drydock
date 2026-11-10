@@ -47,9 +47,10 @@ latest version always wins.
    each `ELIGIBLE` spec, in order, while fewer than **2** executions are
    active:
    - Run the DISPATCH preflight (fail closed). `queue_rules.py check`
-     reports a `marker:` line → move to `<STATE_HOME>/specs/blocked/<id>/`
-     with `QUESTION.md`, commit (in `<STATE_HOME>`, never pushed), notify
-     ("spec blocked: <id> — <gist>").
+     reports a `marker:` or `owner:` line → move to
+     `<STATE_HOME>/specs/blocked/<id>/` with `QUESTION.md`, commit (in
+     `<STATE_HOME>`, never pushed), notify `BLOCKED` ("spec blocked: <id> —
+     <gist>").
    - Preflight passes → move to `<STATE_HOME>/specs/active/<id>/`, commit,
      create the worktree (`git -C <target_repo> worktree add
      <target_repo>-wt/<id> -b <namespace>/drydock-<id> origin/HEAD`
@@ -99,8 +100,8 @@ latest version always wins.
      `PLAN-REVIEW.md`. **Start 8c**: rewrite the header's `phase: plan`
      line to `phase: implement` (that line only), then launch DISPATCH's 8c
      prompt from the worktree the way Inbox launches an executor. **Plan
-     flagged** and **anything else**: move, commit, notify as for any
-     block below. The last row fails closed, as preflight does: a new
+     flagged** and **anything else**: move, commit, notify `BLOCKED` as for
+     any block below. The last row fails closed, as preflight does: a new
      `phase:` value is a deliberate edit to this table, never something an
      orchestrator guesses its way through.
    - Executor wrote `READY.md` (zero-calls gate passed, no PR exists) and
@@ -142,7 +143,8 @@ latest version always wins.
      At the cap, any `judgement` finding → the reviewer flags; all
      `mechanical` → `cap_retire: true`.
      **flag** → move to `<STATE_HOME>/specs/blocked/<id>/`
-     with the findings as the question, notify with the unblock command;
+     with the findings as the question, notify `BLOCKED` with the unblock
+     command;
      **ship** → any `mechanical` finding outstanding first goes through
      the repair pass (DISPATCH step 12a); then open the draft PR
      (`gh pr create --draft`, title/body
@@ -154,16 +156,16 @@ latest version always wins.
      failure → `blocked/` — per DISPATCH step 12; move to
      `<STATE_HOME>/deliverables/<id>/` with `DELIVERABLE.md` (`pr_url:`),
      prune the worktree, commit in `<STATE_HOME>` (never pushed), notify
-     ("deliverable ready: <id> — reviewed, <link>"). The human sees a PR
-     only after ship. Then dispatch the per-item retro: `cd <STATE_HOME> &&
-     claude --bg --model <review model> --permission-mode <permission-mode>
-     "/drydock:retro <id>"` — it mines this item's QUESTION resolutions and
-     REVIEW rounds into `<STATE_HOME>/PRIORS.md` and queues any rule
-     proposals in `<STATE_HOME>/PROPOSALS.md` (it never amends contracts
-     itself).
+     `DELIVERED` ("deliverable ready: <id> — reviewed, <link>"). The human
+     sees a PR only after ship. Then dispatch the per-item retro:
+     `cd <STATE_HOME> && claude --bg --model <review model>
+     --permission-mode <permission-mode> "/drydock:retro <id>"` — it mines
+     this item's QUESTION resolutions and REVIEW rounds into
+     `<STATE_HOME>/PRIORS.md` and queues any rule proposals in
+     `<STATE_HOME>/PROPOSALS.md` (it never amends contracts itself).
    - Executor escalated to `blocked/` → confirm `QUESTION.md`, commit,
-     notify ("spec blocked: <id> — <gist>"). In the tick report, always
-     include the ready-to-paste command to work it:
+     notify `BLOCKED` ("spec blocked: <id> — <gist>"). In the tick report,
+     always include the ready-to-paste command to work it:
      `claude "/drydock:spec unblock <id>"` (same for specs blocked at
      preflight).
    - Executor died without moving state (no agent, stale RUN.md) — this
@@ -177,7 +179,7 @@ latest version always wins.
      and left no `PLAN-REVIEW.md` — is relaunched with the *Plan gate*
      prompt above, never 8a (8a would overwrite the plan under review),
      under the same one-relaunch cap. A second death of either kind → move
-     to `blocked/` with QUESTION.md describing the failure, notify
+     to `blocked/` with QUESTION.md describing the failure, notify `FAILED`
      ("dispatch failure: <id>").
      **An executor that is alive but stalled** by the liveness check below
      is a dispatch failure too, under the same scope and the same single
@@ -187,21 +189,22 @@ latest version always wins.
      is present in `active/<id>/` and its last `##` heading does not begin
      with `## Resolution`. The executor finished an escalation and wedged
      while handing it off. Stop the session, complete the move to
-     `blocked/` and notify with the unblock command, as for any escalation.
-     A dirty tree has its paths appended to that QUESTION.md as a note;
-     nothing is stashed or committed. Never rescue, reset or relaunch it,
-     whatever the state of the tree or of `READY.md`. A `QUESTION.md`
-     whose last `##` heading is a `## Resolution …` is history carried in
-     from an earlier unblock and does not trigger this arm — presence
-     alone would send every re-dispatched item back to `blocked/`.
+     `blocked/` and notify with the unblock command, as for any escalation
+     (`BLOCKED`). A dirty tree has its paths appended to that QUESTION.md
+     as a note; nothing is stashed or committed. Never rescue, reset or
+     relaunch it, whatever the state of the tree or of `READY.md`. A
+     `QUESTION.md` whose last `##` heading is a `## Resolution …` is
+     history carried in from an earlier unblock and does not trigger this
+     arm — presence alone would send every re-dispatched item back to
+     `blocked/`.
      **(ii) `READY.md`**: present and
      `git -C <path> status --porcelain` empty → do nothing here; the
      ready-to-review bullet above owns the item. `READY.md` present and the
      tree dirty → stop the session, move the item to `blocked/` with a
-     QUESTION.md naming the dirty paths, notify ("dispatch failure: <id>"),
-     and never rescue, reset or relaunch it: the reset guard below is
-     satisfied by a finished, unpushed run, so a late check would strip the
-     finished commit off the branch. Every other stalled item: stop the
+     QUESTION.md naming the dirty paths, notify `FAILED` ("dispatch failure:
+     <id>"), and never rescue, reset or relaunch it: the reset guard below
+     is satisfied by a finished, unpushed run, so a late check would strip
+     the finished commit off the branch. Every other stalled item: stop the
      session first. Then commit everything in the worktree, tracked or not,
      to a new local branch `rescue/<id>-wip`; reset the item's branch to the
      sha the run started at — `base_sha:` for a first run, the tip DISPATCH
@@ -218,7 +221,8 @@ latest version always wins.
      `rescue/<id>-wip`. Re-run every acceptance criterion on it before
      building on it; evidence older than the rescue commit is a lead, not a
      result."* A second stall, or a death after a stall, is the second
-     failure: `blocked/`, QUESTION.md, "dispatch failure: <id>". Any
+     failure: `blocked/`, QUESTION.md, notify `FAILED` ("dispatch failure:
+     <id>"). Any
      QUESTION.md or DELIVERABLE.md written for a stalled run reports
      **elapsed** and **stalled** minutes as separate numbers, and never
      reports elapsed wall clock as work.
@@ -274,10 +278,10 @@ latest version always wins.
      delay every real stall by the margin it buys; a legitimately long
      step is carried by `hold:` and by the two samples, not by the number.
      `max_wall_clock` exceeded and live → genuinely over budget: stop the
-     agent, move to `blocked/`, notify ("budget exceeded: <id>"). Exceeded
-     and stalled → not a budget failure; it is the stall above. Exceeded
-     and indeterminate → a dead session is the death above; a live one is
-     over budget as if live, since nothing shows it stalled.
+     agent, move to `blocked/`, notify `BUDGET` ("budget exceeded: <id>").
+     Exceeded and stalled → not a budget failure; it is the stall above.
+     Exceeded and indeterminate → a dead session is the death above; a live
+     one is over budget as if live, since nothing shows it stalled.
 3. **Housekeeping** — sweep `<STATE_HOME>/deliverables/*/DELIVERABLE.md`
    recorded `pr_url`s (`gh pr view --json state` — never scan the target
    repo's PR list): **merged** → move the item to `<STATE_HOME>/archive/`,
@@ -346,10 +350,22 @@ trust, run executors with `--permission-mode acceptEdits` instead and accept
 that some runs will block on prompts — a stalled run is recoverable; an
 unreviewed mutation against live infrastructure is not.
 
+**A spec's `owner` session runs in `<permission-mode>` too.** It receives
+that spec's events by `SendMessage` (*Notifications*, under Hard limits),
+and a session running in a different permission mode than this one holds
+cross-session messages for its user's approval, may let them expire, or
+refuses them. A message held for approval is not delivered. For an owner on
+this machine a `[Cross-session delivery notice]` says so and the routing
+falls back to the human. For a Remote Control, cloud or Claude Desktop
+session nothing reports back, so a message held there never reads as
+undelivered — one more reason the owner must run in the same mode as this
+loop.
+
 ## Hard limits
 
 - Max 2 concurrent executions; max 1 relaunch per spec; never edit a SPEC.md
-  (specs change only via the human's review loop).
+  — specs change only via the unblock loop (the human, or the spec's
+  `owner` when set).
 - Every standing rule your environment enforces applies to you and to every
   executor you dispatch. If your setup restricts infrastructure verbs,
   requires explicit cluster/project targeting, or gates data-mutating
@@ -357,8 +373,36 @@ unreviewed mutation against live infrastructure is not.
 - `<STATE_HOME>` is never given a remote by this loop or by any skill. If one
   ever appears there, stop and flag it loudly in the tick report instead of
   committing — that is a standing invariant, not a preference.
-- Notifications only for delivered / blocked / dispatch failure / budget —
-  never for dispatch starts or progress. Use the `PushNotification` tool.
+- **Notifications** — only for four events, never for dispatch starts or
+  progress: blocked (at preflight included) → `BLOCKED`, delivered →
+  `DELIVERED`, dispatch failure → `FAILED`, budget exceeded → `BUDGET`.
+  Every `notify` in this file names its token and its text, and this is the
+  one place that says where it goes. At each event:
+  1. Run `python3 <PLUGIN_HOME>/board/queue_rules.py route <SPEC.md>` on
+     the item's `SPEC.md`, in whichever queue directory the event left the
+     item. Run it at every event: the spec may have been amended since the
+     last one.
+  2. `human` → the `PushNotification` tool, with the site's text.
+  3. `owner<TAB><name>` and a `ListAgents` row whose name is exactly
+     `<name>` → `SendMessage` to `<name>`. The message's first line is
+     `<TOKEN> <id> — <gist>`, where `<gist>` is one line on what happened
+     (the site's text after `<id>`, where it has any); its second line is
+     the absolute path of the item's directory. No `PushNotification` is
+     sent.
+  4. `<name>` not listed, a send error (an error asking which of two rows
+     is meant included), or a `[Cross-session delivery notice]` saying the
+     message was held, refused or expired → `PushNotification` with the
+     site's text, plus the tick-report line `owner <name> unreachable
+     (<reason>); notified human`. A send is delivered only when it succeeded
+     and no such notice arrived before the tick ends; one whose result says
+     this session has no inbox for a notice to reach is not confirmed
+     either, and falls back with the reason `no delivery notices`.
+  5. A non-zero exit from `route` (an invalid `owner:`, an unreadable
+     `SPEC.md`) → `PushNotification` with the site's text, plus a
+     tick-report line naming the error `route` printed on stderr.
+
+  Whatever the route, the tick report still always carries the
+  ready-to-paste unblock command for blocked items.
 - If the human types into this session, answer from verified queue state,
   then resume the loop.
 - **The orchestrator is a session too.** DISPATCH.md's `## Every session`
