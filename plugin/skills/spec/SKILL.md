@@ -105,7 +105,7 @@ writing nothing: how it obtains a decision is outside drydock.
 If your setup names sessions, name this one `unblock-<id>` — sessions
 launched from a board card are otherwise indistinguishable in the session
 list. An owner running the unblock in its own session keeps its own name:
-that name is what `route` sends the spec's events to.
+that name is what `route` prints, and where the spec's events are sent.
 
 ## Anti-patterns
 

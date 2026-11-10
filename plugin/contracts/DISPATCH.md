@@ -586,10 +586,11 @@ every change to it is committed, so the commit can be the readback.
     **flag**, with the pass's evidence as the question.
 13. Commit the move in `<STATE_HOME>`'s own git repo — never pushed, it has
     no remote. Notify per the orchestrator's Notifications policy
-    (ORCHESTRATOR.md, Hard limits): `queue_rules.py route` sends the event
-    to the spec's `owner` session by `SendMessage` when it names one that
-    can be reached, and to the human by `PushNotification` otherwise. A
-    manual dispatch still just reports in-chat.
+    (ORCHESTRATOR.md, Hard limits): the event goes where
+    `queue_rules.py route` says, to the spec's `owner` session by
+    `SendMessage` when it names one that can be reached, and to the human
+    by `PushNotification` otherwise. A manual dispatch still just reports
+    in-chat.
 
 ## Review (the human)
 

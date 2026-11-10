@@ -350,9 +350,12 @@ trust, run executors with `--permission-mode acceptEdits` instead and accept
 that some runs will block on prompts — a stalled run is recoverable; an
 unreviewed mutation against live infrastructure is not.
 
-**A spec's `owner` session runs in `<permission-mode>` too.** It receives
-that spec's events by `SendMessage` (*Notifications*, under Hard limits),
-and a session running in a different permission mode than this one holds
+**A spec's `owner` session runs in the permission mode this loop's own
+session runs in.** That is `<permission-mode>` only when the loop itself
+was started in it: the config line sets the mode of the sessions this loop
+launches, not of the loop. The owner receives that spec's events by
+`SendMessage` (*Notifications*, under Hard limits), and a session running
+in a different permission mode than the loop's holds
 cross-session messages for its user's approval, may let them expire, or
 refuses them. A message held for approval is not delivered. For an owner on
 this machine a `[Cross-session delivery notice]` says so and the routing
@@ -365,7 +368,7 @@ loop.
 
 - Max 2 concurrent executions; max 1 relaunch per spec; never edit a SPEC.md
   — specs change only via the unblock loop (the human, or the spec's
-  `owner` when set).
+  `owner` when set) and the human's fast rejection in the review pass.
 - Every standing rule your environment enforces applies to you and to every
   executor you dispatch. If your setup restricts infrastructure verbs,
   requires explicit cluster/project targeting, or gates data-mutating
@@ -376,8 +379,10 @@ loop.
 - **Notifications** — only for four events, never for dispatch starts or
   progress: blocked (at preflight included) → `BLOCKED`, delivered →
   `DELIVERED`, dispatch failure → `FAILED`, budget exceeded → `BUDGET`.
-  Every `notify` in this file names its token and its text, and this is the
-  one place that says where it goes. At each event:
+  Every site in this file that notifies of one of the four names its
+  token, and this is the one place that says where it goes. A site that
+  quotes no text of its own uses the text another site quotes for the same
+  token. At each event:
   1. Run `python3 <PLUGIN_HOME>/board/queue_rules.py route <SPEC.md>` on
      the item's `SPEC.md`, in whichever queue directory the event left the
      item. Run it at every event: the spec may have been amended since the
@@ -400,6 +405,11 @@ loop.
   5. A non-zero exit from `route` (an invalid `owner:`, an unreadable
      `SPEC.md`) → `PushNotification` with the site's text, plus a
      tick-report line naming the error `route` printed on stderr.
+
+  A notification these contracts ask for without a token — the failed
+  `eligible` run under *Inbox*, DISPATCH.md step 17's "comments addressed"
+  — is not routed: it goes to the human by the `PushNotification` tool,
+  whatever the spec's `owner`.
 
   Whatever the route, the tick report still always carries the
   ready-to-paste unblock command for blocked items.
