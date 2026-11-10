@@ -102,6 +102,17 @@ class RoutingBlockTest(unittest.TestCase):
     def test_never_for_dispatch_starts_or_progress(self):
         self.assertIn("never for dispatch starts or progress", self.flat)
 
+    def test_human_in_other_contracts_reads_as_the_unblock_decider(self):
+        # DISPATCH steps 10 and 12, REVIEWER.md and the FAQ say "the human";
+        # this rule keeps them true when a spec names an owner, without
+        # taking the human out of the fallback.
+        for phrase in ('say a blocked item reaches "the human"', '"the human decides"',
+                       "unblock decider", "`owner` session when one is set and reachable",
+                       "the human otherwise",
+                       "The human is still notified by the steps above whenever "
+                       "delivery to the owner is not confirmed"):
+            self.assertIn(phrase, self.flat, phrase)
+
     def test_routing_names_a_session_never_a_role(self):
         # Drydock knows "a session name" and "human", nothing more.
         for word in ("conductor", "lead", "charter"):
