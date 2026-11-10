@@ -78,7 +78,10 @@ every change to it is committed, so the commit can be the readback.
    `python3 <PLUGIN_HOME>/board/queue_rules.py check <SPEC.md>`, the code
    the board applies to every card: any `chain:` line it prints fails
    preflight (fail closed). It knows `main` and `master` only, so a default
-   branch by any other name is still yours to check.
+   branch by any other name is still yours to check. The optional `owner:`
+   field, if present, must name exactly one session by a valid session
+   name; the same `check` reports a broken one as an `owner:` line, which
+   blocks the spec exactly as a `marker:` line does (item 2).
 2. **Zero unresolved `NEEDS CLARIFICATION` markers.** A marker is the
    bracketed form with a colon and a non-empty body, on one line:
    `[NEEDS CLARIFICATION: …]`. The bare words, the bracketed words with no
@@ -583,7 +586,11 @@ every change to it is committed, so the commit can be the readback.
     **flag**, with the pass's evidence as the question.
 13. Commit the move in `<STATE_HOME>`'s own git repo — never pushed, it has
     no remote. Notify per the orchestrator's Notifications policy
-    (`PushNotification`; a manual dispatch just reports in-chat).
+    (ORCHESTRATOR.md, Hard limits): the event goes where
+    `queue_rules.py route` says, to the spec's `owner` session by
+    `SendMessage` when it names one that can be reached, and to the human
+    by `PushNotification` otherwise. A manual dispatch still just reports
+    in-chat.
 
 ## Review (the human)
 

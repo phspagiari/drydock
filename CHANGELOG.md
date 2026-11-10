@@ -16,6 +16,20 @@ between "designed" and "shipped" is on the record:
   provenance after a fix round).
 - Chained items' prepared PR text applied at ship (PROPOSALS P15).
 
+### Added
+
+- **Owner-routed escalations.** A spec may name `owner: <session-name>` in
+  its frontmatter (commented out in the template). The new
+  `queue_rules.py route` turns that into `owner<TAB><name>` or `human`, and
+  exits 2 on an invalid owner, which `check` also reports as an `owner:`
+  line that blocks the spec at preflight. The orchestrator sends the four
+  notification events — now tokens `BLOCKED`, `DELIVERED`, `FAILED`,
+  `BUDGET` — to a listed owner session by `SendMessage`, and falls back to
+  `PushNotification` with a tick-report line whenever delivery is not
+  confirmed. Unblock mode accepts the owner as the decider, every
+  `## Resolution` opens with `resolved_by:`, and the retro keeps that name
+  in its citations. A spec without `owner:` behaves exactly as before.
+
 ## [0.4.0] — 2026-09-28
 
 The release that turns the priors from an append-only log into a maintained

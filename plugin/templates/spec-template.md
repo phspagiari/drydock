@@ -35,6 +35,14 @@ depends_on: []                   # spec ids that must have shipped (deliverables
                                  # replace its title and body with the reviewed
                                  # prepared text (a full replacement).
                                  # Requires branch:, which must be its head ref.
+# owner: <session-name>          # optional: the session this spec answers to —
+                                 # its blocked, delivered, dispatch-failure and
+                                 # budget events go to that session by
+                                 # SendMessage (the human when it cannot be
+                                 # reached), and it may decide this spec's
+                                 # unblocks. Absent means the human. The value
+                                 # is a session name exactly as ListAgents
+                                 # shows it; a name with a space is rejected.
 budget:
   max_agents: 4                  # hard cap on concurrent subagents
   max_wall_clock: 2h             # execution aborts and escalates past this

@@ -104,7 +104,9 @@ The other half is what happens when an agent *can't* finish. Delivering with cav
 an executor that hits an unresolved question, a failing criterion, or a step outside its declared
 blast radius stops, writes the concrete decision you need into `QUESTION.md`, and files itself into
 `specs/blocked/`. Everything you must decide reaches you before any PR exists — never as a footnote
-in a description you would have skimmed.
+in a description you would have skimmed. A spec may name an `owner:` session instead: its events go
+to that session by `SendMessage`, it may decide the item's unblocks, and anything it cannot be
+reached for still comes to you.
 
 ## Quickstart
 
@@ -156,7 +158,7 @@ created by `/drydock:install`, never this repository, and never given a remote.
 |---|---|---|---|
 | `specs/inbox/<id>/` | `inbox` | Written and dispatchable — or waiting on a `depends_on` id that has not shipped | Preflight passes → `active`; an unresolved `[NEEDS CLARIFICATION]` → `blocked` |
 | `specs/active/<id>/` | `active` | An executor is running in a worktree. Review and fix rounds happen here | Reviewer's `ship` → `deliverables/`; `flag` → `blocked` |
-| `specs/blocked/<id>/` | `blocked` | A human decision is needed. `QUESTION.md` holds it: the question, the options, what was ruled out | `/drydock:spec unblock <id>` writes the answer into the spec → `inbox` |
+| `specs/blocked/<id>/` | `blocked` | A decision is needed — the human's, or the spec's `owner` session's when it names one. `QUESTION.md` holds it: the question, the options, what was ruled out | `/drydock:spec unblock <id>` writes the answer into the spec and records `resolved_by:` → `inbox` |
 | `deliverables/<id>/` | `delivered` | Draft PR open and already reviewed — **ready for your review** | `/drydock:review`: approve → `archive/`; reject → `inbox` |
 | `archive/<id>/` | `archive` | Approved, or the PR merged | Terminal |
 
@@ -183,7 +185,7 @@ tick of a loop that is already running.
 | Command | Does | Where you run it |
 |---|---|---|
 | `/drydock:spec` | Converges the session you are in into a spec instead of building mid-analysis | Any work session |
-| `/drydock:spec unblock <id>` | Answers an escalation, writes the decision into the spec, re-queues it | Its own session |
+| `/drydock:spec unblock <id>` | Answers an escalation, writes the decision into the spec, re-queues it | Its own session, or the spec's `owner` session |
 | `/drydock:orchestrate` | Starts the loop, or runs one tick | A pinned pane, on your longest-running model |
 | `/drydock:dispatch <id>` | Runs one spec now instead of waiting for a tick | Anywhere |
 | `/drydock:review` | The human pass: blocked questions first, then deliverables | Daily |
