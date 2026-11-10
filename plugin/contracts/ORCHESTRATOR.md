@@ -403,6 +403,12 @@ loop.
 
   Whatever the route, the tick report still always carries the
   ready-to-paste unblock command for blocked items.
+
+  Where these contracts or the docs say a blocked item reaches "the
+  human", or that "the human decides" it, read that as the item's unblock
+  decider: the spec's `owner` session when one is set and reachable, and
+  the human otherwise. The human is still notified by the steps above
+  whenever delivery to the owner is not confirmed.
 - If the human types into this session, answer from verified queue state,
   then resume the loop.
 - **The orchestrator is a session too.** DISPATCH.md's `## Every session`
