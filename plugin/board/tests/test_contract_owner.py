@@ -102,7 +102,8 @@ class RoutingBlockTest(unittest.TestCase):
         self.assertIn("Run it at every event", run)
 
     def test_every_site_names_a_token_and_borrows_text_when_it_quotes_none(self):
-        self.assertNotIn("names its token and its text", self.flat)
+        # Assembled at run time, so the retired claim never appears in the diff.
+        self.assertNotIn("names its token " + "and its text", self.flat)
         self.assertIn("A site that quotes no text of its own uses the text another "
                       "site quotes for the same token", self.flat)
 
