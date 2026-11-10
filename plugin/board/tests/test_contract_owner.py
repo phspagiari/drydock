@@ -93,7 +93,7 @@ class RoutingBlockTest(unittest.TestCase):
             self.assertIn(phrase, fallback[0], phrase)
 
     def test_a_send_with_no_inbox_for_notices_is_not_confirmed(self):
-        # Beyond the spec's first definition of a confirmed delivery, by amendment.
+        # A send that cannot be told of a hold is not a confirmed delivery either.
         fallback = self.one(lambda i: "[Cross-session delivery notice]" in i, "fallback step")
         for phrase in ("A send is delivered only when it succeeded and no such notice "
                        "arrived before the tick ends",
@@ -108,7 +108,7 @@ class RoutingBlockTest(unittest.TestCase):
         self.assertIn("Run it at every event", run)
 
     def test_every_site_names_a_token_and_borrows_text_when_it_quotes_none(self):
-        # Assembled at run time, so the retired claim never appears in the diff.
+        # Split in two, so a search of the repo for the retired claim finds nothing.
         self.assertNotIn("names its token " + "and its text", self.flat)
         self.assertIn("A site that quotes no text of its own uses the text another "
                       "site quotes for the same token", self.flat)
@@ -195,7 +195,8 @@ class DispatchStep13Test(unittest.TestCase):
         self.assertTrue(m, "no step 13")
         step = flat(m.group(0))
         for phrase in ("Notifications policy", "`owner`", "`SendMessage`",
-                       "`PushNotification`", "in-chat"):
+                       "`PushNotification`", "in-chat",
+                       "the event goes where `queue_rules.py route` says"):
             self.assertIn(phrase, step, phrase)
 
 
@@ -253,6 +254,10 @@ class UnblockLoopTest(unittest.TestCase):
                        "outside drydock", "2. Discuss until the decider decides."):
             self.assertIn(phrase, text, phrase)
         self.assertNotIn("Discuss until the human decides", text)
+
+    def test_route_prints_the_owner_name_and_the_loop_sends(self):
+        self.assertIn("that name is what `route` prints, and where the spec's events are sent",
+                      flat(self.unblock))
 
     def test_hard_limits_names_the_unblock_loop(self):
         limits = flat(h2_section(read("contracts/ORCHESTRATOR.md"), "## Hard limits"))
