@@ -30,7 +30,7 @@ skill only adds argument handling on top.
    non-zero exit means the config or the queue is malformed: report its
    stderr and stop, fail closed.
 2. Run the `<PLUGIN_HOME>/contracts/DISPATCH.md` preflight, fail closed.
-   A `marker:` or `chain:` line from `queue_rules.py check` →
+   A `marker:`, `chain:` or `owner:` line from `queue_rules.py check` →
    `<STATE_HOME>/specs/blocked/<id>/` +
    `QUESTION.md`, commit in `<STATE_HOME>` (never pushed), report — do not
    execute.
