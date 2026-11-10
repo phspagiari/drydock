@@ -63,6 +63,12 @@ class RoutingBlockTest(unittest.TestCase):
         self.items = sub_items(self.block)
         self.assertGreaterEqual(len(self.items), 4, "routing block lost its steps")
 
+    def one(self, keep, what: str) -> str:
+        """The single routing step ``keep`` selects; a FAIL, never an ERROR, otherwise."""
+        found = [i for i in self.items if keep(i)]
+        self.assertEqual(len(found), 1, f"expected one {what} in the routing block")
+        return found[0]
+
     def test_routing_runs_queue_rules_route(self):
         self.assertIn("python3 <PLUGIN_HOME>/board/queue_rules.py route", self.flat)
 
@@ -72,7 +78,7 @@ class RoutingBlockTest(unittest.TestCase):
                 self.assertRegex(self.flat, rf"{re.escape(event)}[^→]{{0,40}}→ `{token}`")
 
     def test_routing_sends_a_live_owner_a_message_and_no_push(self):
-        (owner,) = [i for i in self.items if i.startswith("`owner<TAB><name>`")]
+        owner = self.one(lambda i: i.startswith("`owner<TAB><name>`"), "owner step")
         for phrase in ("`ListAgents`", "`SendMessage` to `<name>`",
                        "`<TOKEN> <id> — <gist>`", "absolute path of the item's directory",
                        "No `PushNotification` is sent"):
@@ -88,7 +94,7 @@ class RoutingBlockTest(unittest.TestCase):
 
     def test_a_send_with_no_inbox_for_notices_is_not_confirmed(self):
         # Beyond the spec's first definition of a confirmed delivery, by amendment.
-        (fallback,) = [i for i in self.items if "[Cross-session delivery notice]" in i]
+        fallback = self.one(lambda i: "[Cross-session delivery notice]" in i, "fallback step")
         for phrase in ("A send is delivered only when it succeeded and no such notice "
                        "arrived before the tick ends",
                        "no inbox for a notice to reach is not confirmed",
@@ -96,9 +102,9 @@ class RoutingBlockTest(unittest.TestCase):
             self.assertIn(phrase, fallback, phrase)
 
     def test_owner_must_be_listed_by_exact_name_and_route_runs_each_event(self):
-        (owner,) = [i for i in self.items if i.startswith("`owner<TAB><name>`")]
+        owner = self.one(lambda i: i.startswith("`owner<TAB><name>`"), "owner step")
         self.assertIn("a `ListAgents` row whose name is exactly `<name>`", owner)
-        (run,) = [i for i in self.items if i.startswith("Run `python3")]
+        run = self.one(lambda i: i.startswith("Run `python3"), "route step")
         self.assertIn("Run it at every event", run)
 
     def test_every_site_names_a_token_and_borrows_text_when_it_quotes_none(self):
@@ -122,7 +128,7 @@ class RoutingBlockTest(unittest.TestCase):
         self.assertIn("tick-report line", failed[0])
 
     def test_human_route_keeps_todays_push(self):
-        (human,) = [i for i in self.items if i.startswith("`human`")]
+        human = self.one(lambda i: i.startswith("`human`"), "human step")
         self.assertIn("`PushNotification`", human)
 
     def test_tick_report_still_carries_the_unblock_command(self):
