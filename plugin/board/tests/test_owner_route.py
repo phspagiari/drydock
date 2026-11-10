@@ -186,6 +186,40 @@ class TestRouteCli(unittest.TestCase):
         self.assertEqual(self.route(before + spec("owner: lead-a").split("\n", 2)[2]),
                          (0, "owner\tlead-a\n", ""))
 
+    # A yaml block quoted in a comment or another fence is not a fenced block,
+    # so it is never the frontmatter: the marker rule's fences and comments
+    # decide that, not a line scan. Each shape is checked with a real
+    # frontmatter after it that names lead-a, and with one that names nobody.
+    QUOTED = "```yaml\nowner: ghost\n```\n"
+
+    def assert_quote_is_skipped(self, before: str, after: str):
+        self.assertEqual(self.route(f"# Spec: x\n\n{before}{self.QUOTED}{after}\n"
+                                    "```yaml\nid: x\nowner: lead-a\n```\n"),
+                         (0, "owner\tlead-a\n", ""))
+        self.assertEqual(self.route(f"# Spec: x\n\n{before}{self.QUOTED}{after}\n"
+                                    "```yaml\nid: x\n```\n"),
+                         (0, "human\n", ""))
+
+    def test_yaml_block_quoted_in_an_html_comment_is_not_frontmatter(self):
+        self.assert_quote_is_skipped("<!--\n", "-->\n")
+
+    def test_yaml_block_quoted_in_a_longer_backtick_fence_is_not_frontmatter(self):
+        self.assert_quote_is_skipped("````text\n", "````\n")
+
+    def test_yaml_block_quoted_in_a_tilde_fence_is_not_frontmatter(self):
+        self.assert_quote_is_skipped("~~~text\n", "~~~\n")
+
+    def test_frontmatter_closes_on_a_longer_backtick_fence(self):
+        # A fence closes on a run of its own char at least as long as its opener.
+        self.assertEqual(self.route("# Spec\n\n```yaml\nowner: lead-a\n````\n"),
+                         (0, "owner\tlead-a\n", ""))
+        self.assertEqual(self.route("# Spec\n\n```yaml\nid: x\n````\n\nowner: lead-b\n"),
+                         (0, "human\n", ""))
+
+    def test_frontmatter_does_not_close_on_a_tilde_fence(self):
+        self.assertEqual(self.route("# Spec\n\n```yaml\nid: x\n~~~\nowner: lead-a\n```\n"),
+                         (0, "owner\tlead-a\n", ""))
+
     def test_unclosed_yaml_block_is_no_frontmatter(self):
         # Reading to end of file would read the body as frontmatter.
         self.assertEqual(self.route("# Spec\n\n```yaml\ntrack: code\n\nowner: lead-a\n"),

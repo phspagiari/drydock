@@ -139,17 +139,21 @@ OWNER_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 def frontmatter_lines(spec: str) -> list[str]:
     """The lines inside the spec's first ```` ```yaml ```` fenced block.
 
-    Empty when there is no such block, and when it is never closed: reading
-    an unclosed block to the end of the file would read the body as
-    frontmatter.
+    Fences and comments are the marker rule's (:func:`walk`), so a yaml
+    block quoted inside an HTML comment or inside another fenced block is
+    not a fenced block and is never the frontmatter. The block ends where
+    :func:`walk` closes it. Empty when there is no such block, and when it
+    is never closed: reading an unclosed block to the end of the file would
+    read the body as frontmatter.
     """
     lines = spec.splitlines()
-    for start, line in enumerate(lines):
-        if YAML_FENCE_RE.match(line):
-            for end in range(start + 1, len(lines)):
-                if lines[end].startswith("```"):
-                    return lines[start + 1:end]
-            return []
+    start = None
+    for index, kind, _ in walk(lines):
+        if start is None:
+            if kind == OPEN and YAML_FENCE_RE.match(lines[index]):
+                start = index
+        elif kind == CLOSE:
+            return lines[start + 1:index]
     return []
 
 
@@ -240,34 +244,59 @@ def _mask_line(line: str, in_comment: bool) -> tuple[str, bool]:
     return "".join(out), in_comment
 
 
-def find_markers(text: str) -> list[tuple[int, str]]:
-    """``(1-based line, body)`` for every clarification marker in ``text``.
+#: What :func:`walk` says a line is.
+OPEN, INSIDE, CLOSE, TEXT = "open", "inside", "close", "text"
 
-    Fenced blocks (backtick or tilde, closed by a run of the same char at
-    least as long), HTML comments (multi-line too) and inline code spans are
-    blanked first, with line numbers preserved. The body is read from the
-    original line, stripped.
+
+def walk(lines: list[str]):
+    """``(index, kind, masked)`` for every line: the one fence and comment rule.
+
+    ``kind`` is ``OPEN`` for a fence opener, ``INSIDE`` for a line within a
+    fenced block, ``CLOSE`` for the line that closes one, and ``TEXT`` for
+    everything else. A fence is backtick or tilde, opened outside an HTML
+    comment and closed by a run of the same char at least as long with
+    nothing after it. ``masked`` is a ``TEXT`` line with comment and
+    code-span characters blanked (:func:`_mask_line`), and ``""`` otherwise.
+    Both the marker rule and the frontmatter rule read the file through this.
     """
-    found: list[tuple[int, str]] = []
     fence = ""
     in_comment = False
-    # split("\n"), not splitlines(): line numbers must agree with grep -n.
-    for lineno, line in enumerate(text.split("\n"), 1):
+    for index, line in enumerate(lines):
         if fence:
             m = FENCE_RE.match(line)
             if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) \
                     and not line[m.end():].strip():
                 fence = ""
+                yield index, CLOSE, ""
+            else:
+                yield index, INSIDE, ""
             continue
         if not in_comment:
             m = FENCE_RE.match(line)
             # A backtick fence's info string may not contain a backtick.
             if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):
                 fence = m.group(1)
+                yield index, OPEN, ""
                 continue
         masked, in_comment = _mask_line(line, in_comment)
-        for m in MARKER_RE.finditer(masked):
-            found.append((lineno, line[m.start(1):m.end(1)].strip()))
+        yield index, TEXT, masked
+
+
+def find_markers(text: str) -> list[tuple[int, str]]:
+    """``(1-based line, body)`` for every clarification marker in ``text``.
+
+    Fenced blocks, HTML comments (multi-line too) and inline code spans are
+    blanked first (:func:`walk`), with line numbers preserved. The body is
+    read from the original line, stripped.
+    """
+    found: list[tuple[int, str]] = []
+    # split("\n"), not splitlines(): line numbers must agree with grep -n.
+    lines = text.split("\n")
+    for index, kind, masked in walk(lines):
+        if kind == TEXT:
+            line = lines[index]
+            for m in MARKER_RE.finditer(masked):
+                found.append((index + 1, line[m.start(1):m.end(1)].strip()))
     return found
 
 
