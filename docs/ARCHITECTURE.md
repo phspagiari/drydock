@@ -113,10 +113,11 @@ The three edges you drive yourself are `/drydock:spec` into the inbox,
 `/drydock:spec unblock <id>` out of `blocked`, and `/drydock:review` out of
 `deliverables`. Every other transition is the orchestrator's.
 
-A spec whose frontmatter names an `owner: <session-name>` hands two of those
-to that session. Its blocked, delivered, dispatch-failure and budget events
-reach the owner by `SendMessage` rather than reaching you, and fall back to
-you whenever the owner cannot be reached. The owner may run the unblock and
+A spec whose frontmatter names an `owner: <session-name>` shares one of
+those with that session, the unblock; `/drydock:review` stays yours. Its
+blocked, delivered, dispatch-failure and budget events reach the owner by
+`SendMessage` rather than reaching you, and fall back to you whenever the
+owner cannot be reached. The owner may run the unblock and
 decide it; an owner that cannot decide leaves the item in `blocked`. Every
 `## Resolution` records who decided in a `resolved_by:` line. A spec without
 `owner:` works exactly as described here.

@@ -180,7 +180,9 @@ Its four events then go to that session by `SendMessage` instead of to you,
 and they fall back to you whenever that session cannot be reached: it is not
 listed, the send fails, or the message is held, refused or expired. The
 `owner` session must run in the orchestrator's permission mode, or its
-messages wait for approval and you are notified instead.
+messages wait for approval. For an owner on this machine the orchestrator
+is told and notifies you instead; for a Remote Control, cloud or Claude
+Desktop session nothing reports the hold.
 
 ## When something comes back blocked
 
