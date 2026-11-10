@@ -10,9 +10,10 @@ config. These tests require each gate to run the CLI and to carry none of the
 count phrasings in ``NUMERIC_CAP``. That is a list, so a count worded another
 way passes it. Two clauses are short enough for a stricter rule: the one that
 opens Hard limits, and the one in DISPATCH.md step 7 that explains why chained
-specs collide. Each must name the key and hold no number at all, the stated
-default aside. Extraction is anchored on content and proves it found the
-region before judging it.
+specs collide. Each must name the key and hold no digit and none of the words
+in ``_ANY_NUMBER``, the stated default aside. That is a list too, a longer
+one: a number word outside it passes. Extraction is anchored on content and
+proves it found the region before judging it.
 """
 
 import re
@@ -44,9 +45,9 @@ NUMERIC_CAP = [
     rf"\b(?:a|the) {_ORD}\b",
 ]
 
-#: Any word that states a count, for a clause that must hold none. Wider than
-#: ``_NUM``, which only has to recognise the phrasings the old prose used. "at
-#: once" is not a count and "once" is not in the list.
+#: Digits, and the listed words that state a count, for a clause that must hold
+#: neither. Wider than ``_NUM``, which only has to recognise the phrasings the
+#: old prose used. "at once" is not a count and "once" is not in the list.
 _ANY_NUMBER = (r"(?:\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven"
                r"|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen"
                r"|twenty|thirty|forty|fifty|hundred|dozen|couple|pair|both|single|twice"
@@ -73,7 +74,7 @@ def numeric_caps(section: str) -> list[str]:
 
 
 def numbers(clause: str) -> list[str]:
-    """Every number in a clause, digits or a word: for a clause that should hold none."""
+    """Every digit run and listed number word in a clause that should hold none."""
     return re.findall(rf"\b{_ANY_NUMBER}\b", normalise(clause))
 
 
@@ -185,7 +186,7 @@ class TestNumericCapDetector(unittest.TestCase):
         self.assertNotIn("max_concurrent", clause)
         self.assertEqual(numeric_caps(clause), ["up to 2", "2 execution"])
 
-    def test_any_number_in_a_short_clause_is_caught(self):
+    def test_digits_and_listed_number_words_are_caught(self):
         self.assertEqual(numbers("capped at 2, whatever `max_concurrent` says"), ["2"])
         self.assertEqual(numbers("Two executions at a time"), ["two"])
         self.assertEqual(numbers("a dozen, or eleven, or both of them"),
