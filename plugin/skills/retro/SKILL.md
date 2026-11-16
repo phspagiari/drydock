@@ -100,7 +100,13 @@ description: Self-improvement pass over drydock's own history — mine unblock d
   - `scope:` — the target repo's path, or `global`. It must agree with the
     file the table above sends the prior to.
   - `derived_from:` — the citing item id; the citation rule below still
-    applies.
+    applies. A lesson mined from a `QUESTION.md` `## Resolution` cites the
+    session that decided it whenever that section's `resolved_by:` line
+    names one: `derived_from: <id> (QUESTION.md Resolution, resolved_by:
+    lead-a)`, and the same words in any other citation of it. A
+    `resolved_by: human`, or no `resolved_by:` line at all (every
+    resolution written before the field existed), reads as `human` and
+    the citation stays as it always was.
   - `depends_on:` — a **falsifiable fact**: what would have to change for
     the prior to stop being true, stated so an agent reading the repo can
     check it. Where a path is the dependency, backtick it as a glob

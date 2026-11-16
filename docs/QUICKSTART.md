@@ -175,6 +175,15 @@ You will be notified on exactly four events — delivered, blocked, dispatch
 failure, budget exceeded. Never on dispatch starts or progress. If it is quiet,
 it is working.
 
+A spec can name a session in its frontmatter with `owner: <session-name>`.
+Its four events then go to that session by `SendMessage` instead of to you,
+and they fall back to you whenever that session cannot be reached: it is not
+listed, the send fails, or the message is held, refused or expired. The
+`owner` session must run in the orchestrator's permission mode, or its
+messages wait for approval. For an owner on this machine the orchestrator
+is told and notifies you instead; for a Remote Control, cloud or Claude
+Desktop session nothing reports the hold.
+
 ## When something comes back blocked
 
 This is the normal, healthy path — not a failure. An executor hit a decision
@@ -189,6 +198,11 @@ answer is written **into `SPEC.md`** — the next executor sees only the spec, s
 a decision recorded anywhere else is invisible. The reasoning is appended to
 `QUESTION.md` as a `## Resolution` section, which is what `/drydock:retro` mines
 later.
+
+When the spec names an `owner:`, that session may run the unblock and decide
+instead of you; if it cannot decide, the item stays blocked. Either way the
+`## Resolution` opens with a `resolved_by:` line naming who decided — the
+session, or `human`.
 
 Then the item goes back to `inbox` and a **fresh** executor picks it up from
 the amended spec, the branch, and `RUN.md`. The old session is never resurrected
