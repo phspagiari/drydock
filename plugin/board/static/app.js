@@ -118,7 +118,22 @@ function render(state) {
   document.title = (blocked ? `${blocked}⚠ ` : "") + (ready ? `${ready}✓ ` : "") + "drydock board";
 
   el("repo").textContent = state.repo || "";
+  renderSlots(state.slots);
   if (drawer.id) syncDrawerTabs();
+}
+
+/* `active <n>/<cap>` from queue_rules.slots, via the server; "?" when the
+   loop itself would refuse the config (the reason is the tooltip). */
+function renderSlots(slots) {
+  const node = el("slots");
+  if (!slots) { node.textContent = ""; node.removeAttribute("title"); return; }
+  if (slots.error) {
+    node.textContent = "active ?/?";
+    node.title = slots.error;
+    return;
+  }
+  node.textContent = `active ${slots.active}/${slots.cap}`;
+  node.title = `${slots.free} free · max_concurrent in <STATE_HOME>/config`;
 }
 
 /* -------------------------------------------------------------------- poll */

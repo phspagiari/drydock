@@ -22,9 +22,13 @@ skill only adds argument handling on top.
 
 ## Procedure
 
-1. If 2+ executions are already in `<STATE_HOME>/specs/active/`, say so and
-   get explicit go-ahead before adding a third (the orchestrator's
-   concurrency cap applies to humans too).
+1. Run `python3 <PLUGIN_HOME>/board/queue_rules.py slots --root <STATE_HOME>`.
+   It prints `<free>`, `<cap>` and `<active>`, tab-separated; the cap is
+   `max_concurrent` in `<STATE_HOME>/config`. When `free` is 0, say so
+   (active and cap, as printed) and get explicit go-ahead before dispatching
+   anyway — the orchestrator's concurrency cap applies to humans too. A
+   non-zero exit means the config or the queue is malformed: report its
+   stderr and stop, fail closed.
 2. Run the `<PLUGIN_HOME>/contracts/DISPATCH.md` preflight, fail closed.
    A `marker:` or `chain:` line from `queue_rules.py check` →
    `<STATE_HOME>/specs/blocked/<id>/` +

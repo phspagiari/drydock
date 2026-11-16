@@ -30,10 +30,12 @@ from urllib.parse import parse_qs, unquote, urlparse
 # re-exported here so ``server.deps_of`` and friends stay the same objects.
 from queue_rules import (  # noqa: F401
     DEFAULT_BRANCHES,
+    SlotsError,
     _chain_field,
     chain_errors,
     deps_of,
     field,
+    slots,
     unmet_deps,
 )
 
@@ -228,6 +230,19 @@ def scan_item(root: Path, item: Path, state: str,
     }
 
 
+def slots_state(root: Path) -> dict:
+    """``queue_rules.slots`` for the header's ``active <n>/<cap>``.
+
+    The same function the loop gates on, never a second parser. A config the
+    loop would refuse is shown as an error instead of breaking the board.
+    """
+    try:
+        free, cap, active = slots(root)
+    except SlotsError as exc:
+        return {"error": str(exc)}
+    return {"free": free, "cap": cap, "active": active}
+
+
 def scan(root: Path) -> dict:
     """Full queue state, read fresh from disk."""
     out: dict = {}
@@ -246,6 +261,7 @@ def scan(root: Path) -> dict:
     out["now"] = now.strftime("%Y-%m-%d %H:%M:%S %Z").strip()
     out["now_epoch"] = int(now.timestamp())
     out["repo"] = root.name
+    out["slots"] = slots_state(root)
     return out
 
 
