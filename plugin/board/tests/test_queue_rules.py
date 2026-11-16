@@ -191,13 +191,14 @@ class SlotsTestCase(QueueTestCase):
 
 
 class TestMaxConcurrent(unittest.TestCase):
-    """The cap is the ``max_concurrent:`` line, default 2, fail closed."""
+    """The cap is the ``max_concurrent:`` line, else the default; fail closed."""
 
-    def test_missing_file_means_2(self):
-        self.assertEqual(queue_rules.max_concurrent(None), 2)
+    def test_missing_file_means_the_default(self):
+        self.assertEqual(queue_rules.max_concurrent(None), queue_rules.DEFAULT_MAX_CONCURRENT)
 
-    def test_missing_key_means_2(self):
-        self.assertEqual(queue_rules.max_concurrent("namespace: t\npermission_mode: x\n"), 2)
+    def test_missing_key_means_the_default(self):
+        self.assertEqual(queue_rules.max_concurrent("namespace: t\npermission_mode: x\n"),
+                         queue_rules.DEFAULT_MAX_CONCURRENT)
 
     def test_value_with_inline_comment_and_whitespace(self):
         text = "namespace: t\nmax_concurrent:   10   # set by hand\n"
@@ -212,7 +213,7 @@ class TestMaxConcurrent(unittest.TestCase):
                 queue_rules.max_concurrent(f"max_concurrent: {value}\n")
 
     def test_empty_value_does_not_fall_through_to_the_default(self):
-        # field() needs a non-empty value, so it reads these as "absent" -> 2.
+        # field() needs a non-empty value, so it reads these as "absent" -> default.
         for line in ("max_concurrent:", "max_concurrent:   ", "max_concurrent:  # later"):
             with self.subTest(line=line):
                 self.assertEqual(queue_rules.field(line + "\n", "max_concurrent")
@@ -247,12 +248,19 @@ class TestSlotsCli(SlotsTestCase):
         self.assertEqual(self.slots(), (0, "1\t10\t9\n", ""))
 
     def test_default_cap_without_config(self):
+        cap = queue_rules.DEFAULT_MAX_CONCURRENT
         self.active(1)
-        self.assertEqual(self.slots(), (0, "1\t2\t1\n", ""))
+        self.assertEqual(self.slots(), (0, f"{cap - 1}\t{cap}\t1\n", ""))
 
-    def test_free_never_negative(self):
-        self.active(3)
+    def test_free_never_negative_at_the_default(self):
+        cap = queue_rules.DEFAULT_MAX_CONCURRENT
+        self.active(cap + 1)
         self.config("namespace: t\n")
+        self.assertEqual(self.slots(), (0, f"0\t{cap}\t{cap + 1}\n", ""))
+
+    def test_free_never_negative_with_an_explicit_cap(self):
+        self.active(3)
+        self.config("namespace: t\nmax_concurrent: 2\n")
         self.assertEqual(self.slots(), (0, "0\t2\t3\n", ""))
 
     def test_at_the_cap_nothing_is_free(self):

@@ -70,7 +70,7 @@ Where it goes, in rough order:
 
 The controls are in the spec's `budget` block (`max_agents`, `max_wall_clock`,
 `max_criteria_retries`), the cap on concurrent executions (`max_concurrent` in
-`<STATE_HOME>/config`, default 2), the review round cap of 2, and the model
+`<STATE_HOME>/config`, default 5), the review round cap of 2, and the model
 routing table in [`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md) — which exists so `report`
 work does not run on a code-tier model.
 

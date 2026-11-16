@@ -31,10 +31,11 @@ the space as ``[ ]`` so this file never matches a plain substring search.
 ``slots`` prints one line, ``<free><TAB><cap><TAB><active>``: ``active`` is
 the number of directories directly under ``<root>/specs/active/`` whose name
 does not start with ``.``, ``cap`` is the ``max_concurrent:`` value in
-``<root>/config`` (2 when the file or the key is absent) and ``free`` is
-``max(0, cap - active)``. Exit 0; exit 2 with nothing on stdout when the root
-or its ``specs/active`` is not a directory, or when ``max_concurrent`` is not
-a positive integer, is empty, or appears more than once.
+``<root>/config`` (``DEFAULT_MAX_CONCURRENT`` when the file or the key is
+absent) and ``free`` is ``max(0, cap - active)``. Exit 0; exit 2 with nothing
+on stdout when the root or its ``specs/active`` is not a directory, or when
+``max_concurrent`` is not a positive integer, is empty, or appears more than
+once.
 
 The board (``server.py``) imports the parsers from here; this module imports
 ``server`` only inside :func:`main`, for the STATE_HOME default.
@@ -123,7 +124,7 @@ def chain_errors(spec: str) -> list[str]:
 # --------------------------------------------------------------------------
 
 #: The cap when ``<STATE_HOME>/config`` or its ``max_concurrent:`` line is absent.
-DEFAULT_MAX_CONCURRENT = 2
+DEFAULT_MAX_CONCURRENT = 5
 
 #: Every ``max_concurrent:`` line, value up to the end of the line -- possibly
 #: empty. Not :func:`field`: its ``(.+?)`` needs a non-empty value, so an empty

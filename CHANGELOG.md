@@ -18,15 +18,18 @@ between "designed" and "shipped" is on the record:
 
 ### Changed
 
-- **The concurrency cap is a config value.** `max_concurrent: <n>` in
-  `<STATE_HOME>/config` sets how many executions may be active at once; an
-  absent key or file still means 2, so existing installs behave as before.
-  `queue_rules.py slots` computes it, printing `<free>`, `<cap>` and
-  `<active>`, and exits 2 on an invalid, empty or repeated value. The
-  orchestrator's Inbox step and `/drydock:dispatch` step 1 gate on it
-  instead of a number in prose, the board header shows `active <n>/<cap>`
-  from the same function, and `/drydock:install` writes `max_concurrent: 2`
-  into a new config only. A test pins both gates to the CLI.
+- **The concurrency cap is a config value, and its default is now 5.**
+  `max_concurrent: <n>` in `<STATE_HOME>/config` sets how many executions
+  may be active at once. When the key or the file is absent the cap is 5,
+  so an install whose config has no `max_concurrent:` line goes from at
+  most 2 concurrent executions to at most 5 on upgrade. To keep the old
+  limit, add `max_concurrent: 2` to that config. `queue_rules.py slots`
+  computes it, printing `<free>`, `<cap>` and `<active>`, and exits 2 on an
+  invalid, empty or repeated value. The orchestrator's Inbox step and
+  `/drydock:dispatch` step 1 gate on it instead of a number in prose, the
+  board header shows `active <n>/<cap>` from the same function, and
+  `/drydock:install` writes `max_concurrent: 5` into a new config only. A
+  test pins both gates to the CLI.
 
 ## [0.4.0] — 2026-09-28
 

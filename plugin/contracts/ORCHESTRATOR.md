@@ -356,7 +356,7 @@ unreviewed mutation against live infrastructure is not.
 ## Hard limits
 
 - Concurrent executions are capped at `max_concurrent` from
-  `<STATE_HOME>/config` (default 2 when the key is absent), as the Inbox
+  `<STATE_HOME>/config` (default 5 when the key is absent), as the Inbox
   step's `slots` reports it; max 1 relaunch per spec; never edit a SPEC.md
   (specs change only via the human's review loop).
 - Every standing rule your environment enforces applies to you and to every

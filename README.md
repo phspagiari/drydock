@@ -218,7 +218,7 @@ it prevents is expensive.
 - **Deterministic FIFO.** The inbox is ordered lexicographically by id, never by mtime, because
   moves and edits reset mtime.
 - **Bounded concurrency.** At most `max_concurrent` executions at a time (set in
-  `<STATE_HOME>/config`, default 2), one relaunch per spec, and a heartbeat file that stops a
+  `<STATE_HOME>/config`, default 5), one relaunch per spec, and a heartbeat file that stops a
   second orchestrator from starting.
 
 Full lifecycle, the actor model, and the state diagram: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

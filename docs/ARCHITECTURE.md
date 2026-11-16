@@ -236,7 +236,7 @@ What it costs: transitions are not atomic in the database sense, ordering must
 be derived deterministically rather than assumed (hence lexicographic-by-id
 FIFO — mtime is reset by the very moves the queue makes), and concurrency is
 bounded by convention (`max_concurrent` executions from `<STATE_HOME>/config`,
-default 2, as `queue_rules.py slots` computes it; one orchestrator via a
+default 5, as `queue_rules.py slots` computes it; one orchestrator via a
 heartbeat file) rather than by locks. For a queue whose items take tens of
 minutes and whose operator is one person, these are the right trades.
 
