@@ -117,8 +117,8 @@ class RoutingBlockTest(unittest.TestCase):
         m = re.search(r"A notification these contracts ask for without a token.*?"
                       r"whatever the spec's `owner`\.", self.flat)
         self.assertTrue(m, "no rule for notifications without a token")
-        for phrase in ("`eligible`", '"comments addressed"', "is not routed",
-                       "to the human by the `PushNotification` tool"):
+        for phrase in ("`eligible`", "the failed `slots` run", '"comments addressed"',
+                       "is not routed", "to the human by the `PushNotification` tool"):
             self.assertIn(phrase, m.group(0), phrase)
 
     def test_routing_falls_back_when_route_fails(self):
@@ -184,6 +184,21 @@ class EventSitesTest(unittest.TestCase):
                 continue
             with self.subTest(at=window[:60]):
                 self.assertRegex(window, r"`(BLOCKED|DELIVERED|FAILED|BUDGET)`")
+
+    def test_every_untokened_notifies_is_one_the_routing_excepts(self):
+        # "notifies" is how this file spells a notification with no token.
+        # Each must be one the Notifications bullet names as not routed: the
+        # failed `eligible` run and the failed `slots` run under Inbox.
+        sites = list(re.finditer(r"[^.]*\bnotifies\b[^.]*", self.flat))
+        self.assertEqual(len(sites), 2,
+                         f"untokened notify sites: {[s.group(0) for s in sites]}")
+        for anchor in ("queue_rules.py eligible", "queue_rules.py slots"):
+            self.assertTrue(anchor in self.flat, f"no `{anchor}` anchor before Hard limits")
+        eligible_at = self.flat.index("queue_rules.py eligible")
+        slots_at = self.flat.index("queue_rules.py slots")
+        self.assertTrue(eligible_at < sites[0].start() < slots_at,
+                        "the first untokened notify is not the failed `eligible` run")
+        self.assertIn("exit from `slots`", sites[1].group(0))
 
 
 class DispatchStep13Test(unittest.TestCase):

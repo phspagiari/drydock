@@ -416,9 +416,9 @@ loop.
      tick-report line naming the error `route` printed on stderr.
 
   A notification these contracts ask for without a token — the failed
-  `eligible` run under *Inbox*, DISPATCH.md step 17's "comments addressed"
-  — is not routed: it goes to the human by the `PushNotification` tool,
-  whatever the spec's `owner`.
+  `eligible` run and the failed `slots` run under *Inbox*, DISPATCH.md step
+  17's "comments addressed" — is not routed: it goes to the human by the
+  `PushNotification` tool, whatever the spec's `owner`.
 
   Whatever the route, the tick report still always carries the
   ready-to-paste unblock command for blocked items.
