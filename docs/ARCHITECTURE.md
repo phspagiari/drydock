@@ -113,14 +113,18 @@ The three edges you drive yourself are `/drydock:spec` into the inbox,
 `/drydock:spec unblock <id>` out of `blocked`, and `/drydock:review` out of
 `deliverables`. Every other transition is the orchestrator's.
 
-A spec whose frontmatter names an `owner: <session-name>` shares one of
-those with that session, the unblock; `/drydock:review` stays yours. Its
-blocked, delivered, dispatch-failure and budget events reach the owner by
-`SendMessage` rather than reaching you, and fall back to you whenever the
-owner cannot be reached. The owner may run the unblock and
-decide it; an owner that cannot decide leaves the item in `blocked`. Every
-`## Resolution` records who decided in a `resolved_by:` line. A spec without
-`owner:` works exactly as described here.
+On `main`, though not in the released 0.4.0, a spec whose frontmatter names
+an `owner: <session-name>` shares one of those with that session, the
+unblock; `/drydock:review` is written for you. Its blocked, delivered,
+dispatch-failure and budget events reach the owner by `SendMessage` rather
+than reaching you, and fall back to you whenever that delivery is not
+confirmed. A Remote Control, cloud or Claude Desktop session that holds or
+refuses a message reports nothing, a delivery notice that arrives after the
+tick has no step to handle it, and a delivered message is not followed up, so
+in those cases the event may reach no one and the item waits on the board.
+The owner may run the unblock and decide it; an owner that cannot decide
+leaves the item in `blocked`. Every `## Resolution` records who decided in a
+`resolved_by:` line. A spec without `owner:` works exactly as described here.
 
 The cycle worth internalising is `active → in review → active`: a loop that
 runs entirely inside one worktree, with no pull request, no inbox round-trip,
@@ -246,9 +250,10 @@ What this buys:
 What it costs: transitions are not atomic in the database sense, ordering must
 be derived deterministically rather than assumed (hence lexicographic-by-id
 FIFO — mtime is reset by the very moves the queue makes), and concurrency is
-bounded by convention (`max_concurrent` executions from `<STATE_HOME>/config`,
-default 5, as `queue_rules.py slots` computes it; one orchestrator via a
-heartbeat file) rather than by locks. For a queue whose items take tens of
+bounded by convention (no dispatch from the inbox while `max_concurrent`
+items are active, from `<STATE_HOME>/config`, default 5, as
+`queue_rules.py slots` computes it; one orchestrator via a heartbeat file)
+rather than by locks. For a queue whose items take tens of
 minutes and whose operator is one person, these are the right trades.
 
 ## The target repo stays clean

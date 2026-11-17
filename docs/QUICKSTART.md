@@ -41,7 +41,8 @@ write. Seven steps:
 2. **Personalize**: your **branch namespace**, usually your git forge handle — every branch
    drydock creates in a target repo is `<namespace>/drydock-<id>` — and your permission posture
    (step 6). Both get written to `STATE_HOME/config`, never sed-replaced into the plugin's own
-   files, so a later `/plugin update` can never quietly reset them.
+   files, so a later `/plugin update` can never quietly reset them. A config this step creates
+   also gets `max_concurrent: 5` (see [How many run at once](#how-many-run-at-once)).
 3. **Seed the queue**: empty `specs/{inbox,active,blocked}`, `deliverables/`, `archive/`, plus
    `PRIORS.md` and `PROPOSALS.md` copied once from the plugin's seed templates.
 4. **Migrate**, if you used drydock before this refactor: your real queue lived inside a cloned
@@ -171,18 +172,99 @@ To skip the wait on the first one:
 claude "/drydock:dispatch <id>"
 ```
 
-You will be notified on exactly four events — delivered, blocked, dispatch
-failure, budget exceeded. Never on dispatch starts or progress. If it is quiet,
-it is working.
+You will be notified on four events — delivered, blocked, dispatch failure,
+budget exceeded. Never on dispatch starts or progress. If it is quiet, it is
+working. Three other notifications also reach you: a failed run of
+`queue_rules.py eligible` or of `queue_rules.py slots` (the queue or the config
+is malformed, and that tick dispatched nothing), and a comment round on a
+delivered pull request finishing ("comments addressed"). A spec that names an
+`owner:` session sends its four events to that session instead — see
+[Handing a spec to another session](#handing-a-spec-to-another-session).
 
-A spec can name a session in its frontmatter with `owner: <session-name>`.
-Its four events then go to that session by `SendMessage` instead of to you,
-and they fall back to you whenever that session cannot be reached: it is not
-listed, the send fails, or the message is held, refused or expired. The
-`owner` session must run in the orchestrator's permission mode, or its
-messages wait for approval. For an owner on this machine the orchestrator
-is told and notifies you instead; for a Remote Control, cloud or Claude
-Desktop session nothing reports the hold.
+## How many run at once
+
+This section, [Handing a spec to another session](#handing-a-spec-to-another-session)
+and everything elsewhere in drydock's docs about `max_concurrent`, `slots`, a
+spec's `owner` or `resolved_by:` describe `main`, except where they name
+0.4.0. The released 0.4.0 has neither feature: its cap is a fixed 2
+that no config line changes, and it never reads `owner:`. Both stay on
+`main` until the next release. To tell which you have, ask the installed
+plugin for `slots`. A plugin from `main` prints three numbers; one from 0.4.0
+prints:
+
+```console
+$ python3 <PLUGIN_HOME>/board/queue_rules.py slots --root <STATE_HOME>
+usage: queue_rules [-h] {eligible,check} ...
+queue_rules: error: argument command: invalid choice: 'slots' (choose from 'eligible', 'check')
+```
+
+Such a plugin ignores a `max_concurrent:` line and an `owner:` line without
+saying so.
+
+The orchestrator dispatches a spec from the inbox only while fewer than
+`max_concurrent` items are in `specs/active/`. It is a line in
+`STATE_HOME/config`, beside `namespace:` and `permission_mode:`, and when the
+line or the file is absent the cap is 5. An item holds its place from dispatch
+until it leaves `active/`, and its plan gate, its review and its fix rounds all
+happen there, so an item under review still counts. The cap gates new
+dispatches only: a comment round moves a delivered item back into `active/`
+without consulting it, and `/drydock:dispatch` goes over it when you say so,
+so `active` can exceed the cap. The subagents inside one execution are bounded
+separately, by the spec's `budget.max_agents`.
+
+To see the cap and what is free, look at the board's header, which reads
+`active <n>/<cap>` (its tooltip has the free count), or run the code the loop
+itself gates on:
+
+```console
+$ python3 <PLUGIN_HOME>/board/queue_rules.py slots --root <STATE_HOME>
+3       5       2
+```
+
+The three fields are tab-separated: free, cap, active. `<PLUGIN_HOME>` is where
+Claude Code installed the plugin — the `installPath` recorded for
+`drydock@drydock` in `~/.claude/plugins/installed_plugins.json` — or `plugin/`
+in a clone of this repository; without `--root`, `slots` reads
+`$DRYDOCK_STATE_HOME`, else `~/.drydock`.
+
+To change the cap, edit the line and commit the change in STATE_HOME:
+
+```yaml
+max_concurrent: 2
+```
+
+Nothing caches it: each tick's Inbox step runs `slots` before dispatching and
+again after every dispatch, so the new value applies from the next tick
+without restarting the loop. Lowering it below the number already active
+stops nothing — `slots` reports 0 free, and dispatch from the inbox waits
+until enough items have left `active/`. `/drydock:dispatch <id>` reads the
+same numbers; when nothing is free it says so and asks before dispatching
+anyway.
+
+The value is a positive whole number with no quotes and no leading zero, on
+one line; a trailing `# comment` is fine. Zero, a negative number, a word, an
+empty value or a second `max_concurrent:` line makes `slots` exit 2, with
+nothing on stdout and the reason on stderr:
+
+```console
+$ python3 <PLUGIN_HOME>/board/queue_rules.py slots --root <STATE_HOME>
+queue_rules: max_concurrent: '0' is not a positive integer
+```
+
+While the config reads like that, the orchestrator skips dispatch on every
+tick and notifies you (this one never goes to a spec's owner); it still
+verifies what is already running. `/drydock:dispatch` reports the error and
+stops. The board's header shows `active ?/?`, with the reason as its tooltip.
+
+**Upgrading.** In 0.4.0 the limit was 2 and no config line changed it. On
+`main`, a config without a `max_concurrent:` line means 5, so an install that
+takes this change without adding the line goes from 2 to 5. To keep 2, add
+`max_concurrent: 2`. `/drydock:install` writes the line only into a config it
+creates, so re-running it does not add the line to yours.
+
+More at once also means more chances to collide: two specs chained onto the
+same `branch:` cannot run concurrently, so a series that shares a branch needs
+a `depends_on` edge between consecutive members (DISPATCH step 7).
 
 ## When something comes back blocked
 
@@ -210,6 +292,127 @@ the amended spec, the branch, and `RUN.md`. The old session is never resurrected
 
 If `QUESTION.md` is not self-contained enough to decide from, that is itself a
 defect worth routing back into the executing skill. Say so when you answer.
+
+## Handing a spec to another session
+
+By default every event and every blocked question comes to you. A spec can
+instead name a Claude Code session that answers for it — the session that
+wrote it, say, and is still working on the surrounding problem. Like the
+concurrency cap, this is on `main` and not in the released 0.4.0 (see
+[How many run at once](#how-many-run-at-once) to tell which you have). Add one
+line to the spec's frontmatter, the `yaml` block at the top; the template
+carries it commented out:
+
+```yaml
+owner: ledger-work
+```
+
+The value is the session's name as `ListAgents` shows it — the bare name,
+without the bracketed `[ref]` a row prints after it. `ListAgents` is a tool a
+session calls, not a command you type: to see the names, ask a session on this
+machine to list the sessions it can message. drydock does not name the owner
+session, and an owner that runs the unblock keeps the name it has. The name
+may hold letters, digits, `_`, `.` and `-`, at most 64 characters, starting
+with a letter or a digit; a session whose name has a space or any other
+character cannot be an owner. No quotes. Write one
+`owner:` line, at the start of a line, inside that first block. A
+commented-out line, an indented one, or one anywhere else in the spec is not
+read, and the spec stays yours. `/drydock:spec` does not ask about an owner
+and does not write the line: add it to `<STATE_HOME>/specs/inbox/<id>/SPEC.md`
+once the spec is written, before it is dispatched, and commit in STATE_HOME.
+To see what the orchestrator will read:
+
+```console
+$ python3 <PLUGIN_HOME>/board/queue_rules.py route <STATE_HOME>/specs/inbox/<id>/SPEC.md
+owner   ledger-work
+```
+
+It prints `human` when there is no owner. A name outside that alphabet, or two
+`owner:` lines, makes `route` exit 2, and `queue_rules.py check` reports it as
+an `owner:` line, so preflight blocks the spec before it runs and that
+blocked event comes to you.
+
+**Permission mode.** The owner session must run in the same permission mode as
+the orchestrator's own session — the mode that pane is running in. That is not
+necessarily `permission_mode:` in your config, which sets the mode of the
+sessions the loop launches. A session in a different mode holds cross-session
+messages for its user's approval, may let them expire, or refuses them, and a
+held message is not a delivered one. If the loop runs in `bypassPermissions`,
+so must the owner; if that is a session you also work in by hand, it then
+runs without permission prompts, bounded only by your permission policy.
+
+**What the owner receives.** At each of the four events — `BLOCKED`,
+`DELIVERED`, `FAILED` (dispatch failure) and `BUDGET` — the orchestrator runs
+`route` on the spec afresh, so an owner added or changed during an unblock
+applies from the next event. When a `ListAgents` row carries that exact name,
+the orchestrator sends the session a `SendMessage` of two lines: the token,
+the item id and a one-line gist of what happened, then the absolute path of
+the item's directory. For a blocked item it looks like:
+
+```text
+BLOCKED 2026-09-02-transfers-idempotency — Idempotency-Key collision across tenants: reject 409, or scope per tenant?
+/Users/you/.drydock/specs/blocked/2026-09-02-transfers-idempotency
+```
+
+When that message is delivered you get no notification for the event. That
+includes `DELIVERED`: for a spec with a reachable owner nothing tells you its
+deliverable is ready, though approving it is still yours. You find it on the
+board and in your next `/drydock:review`. The orchestrator's tick report still
+carries the paste-ready unblock command for blocked items.
+
+**How the owner unblocks.** The message is those two lines and nothing more:
+it does not tell the session to run the unblock. Whether the owner session acts
+on a `BLOCKED` line by itself or waits for whoever is driving it is up to that
+session and to you. To decide, the owner runs `/drydock:spec unblock <id>` in
+its own session, keeping its own name. The skill accepts it as the decider
+because the spec names it; a session that says it is the owner is taken at its
+word. It decides, writes the answer into `SPEC.md`, appends the
+`## Resolution` to `QUESTION.md` with `resolved_by: ledger-work` as its first
+line, and moves the item back to the inbox. An owner that cannot decide leaves
+the item in `blocked/` and writes nothing; how it gets a decision from there
+is outside drydock. You can still run the unblock yourself at any time — the
+line then reads `resolved_by: human`. The unblock reads and writes STATE_HOME
+(`~/.drydock`, or `$DRYDOCK_STATE_HOME`) on the machine where it runs, so an
+owner that is to answer questions has to run where your STATE_HOME is, with
+the same `$DRYDOCK_STATE_HOME` if you set one.
+
+**What falls back to you.** The event comes to you as a notification, and the
+tick report gets the line `owner <name> unreachable (<reason>); notified
+human`, when:
+
+- no `ListAgents` row is named exactly `<name>`;
+- the send fails, including an error asking which of two sessions by that
+  name was meant;
+- a `[Cross-session delivery notice]` arrives before the tick ends saying the
+  message was held, refused or expired;
+- the send's result says the orchestrator's session has no inbox for such a
+  notice (the reason is `no delivery notices`).
+
+A failed `route` — an invalid `owner:`, an unreadable `SPEC.md` — also sends
+the event to you, with `route`'s error in the tick report. The three
+notifications that carry no event token (a failed `eligible` or `slots` run,
+"comments addressed") always come to you, whatever the spec's owner. A
+`/drydock:dispatch` you run by hand reports its own outcome — dispatched, or
+blocked at preflight — in its chat, not to the owner; the item's later events
+are raised by the orchestrator, when one is running, and routed as above.
+
+Three cases do not fall back. A Remote Control, cloud or Claude Desktop
+session reports nothing when it holds, refuses or lets a message expire, so
+the orchestrator cannot tell the message was not delivered and you are not
+notified. A send counts as delivered when no delivery notice arrived before
+the end of the tick that sent it, and the contracts give no step for a notice
+that arrives later. And a delivered message is only delivered: it reached the
+session, which is not the same as the session acting on it, and the
+orchestrator does not send it again or follow up. In each case the item stays
+where the event left it, on the board. Keep the owner on this machine, in the
+loop's permission mode, and treat the board as the record.
+
+**What an owner does not do.** It decides its spec's unblocks and nothing
+else. It does not approve or reject deliverables: a `DELIVERED` event tells
+the owner the reviewed deliverable is ready, and `/drydock:review` — approve,
+reject, and with approval marking a pull request ready — is written for you.
+That is a convention, like the unblock's: no skill checks who runs it. The
+owner hears only about specs that name it.
 
 ## The review pass
 

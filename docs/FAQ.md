@@ -34,8 +34,9 @@ This buys four things that are expensive to build otherwise:
   directory answers "what happened to this" with no query language.
 - **Rules that can change mid-flight**, because they are versioned alongside
   the state they govern.
-- **Backup for free.** Push the repo; your queue's full history is backed up by
-  the same mechanism as your code.
+- **Backup without a remote.** STATE_HOME never gets one, but
+  `git bundle create <path> --all` snapshots the queue's full history into one
+  file you can copy wherever your own backup policy already covers.
 
 What it costs: transitions are not atomic the way a transaction is, ordering
 has to be derived deterministically rather than assumed, and concurrency is
@@ -69,7 +70,7 @@ Where it goes, in rough order:
 - **Per-item retros** are one short session per ship.
 
 The controls are in the spec's `budget` block (`max_agents`, `max_wall_clock`,
-`max_criteria_retries`), the cap on concurrent executions (`max_concurrent` in
+`max_criteria_retries`), the concurrency cap on dispatch (`max_concurrent` in
 `<STATE_HOME>/config`, default 5), the review round cap of 2, and the model
 routing table in [`ORCHESTRATOR.md`](../plugin/contracts/ORCHESTRATOR.md) — which exists so `report`
 work does not run on a code-tier model.
@@ -78,6 +79,38 @@ The thing that actually blows a budget is not the loop; it is a spec whose
 acceptance criteria cannot be satisfied, burning retries and review rounds
 before escalating. Criteria scoped to your diff, and at least one that encodes
 intent, are the cost control.
+
+## How many executions run at once, and how do I change that?
+
+The loop dispatches from the inbox only while fewer than `max_concurrent`
+items are active. `max_concurrent` is a line in `<STATE_HOME>/config`; 5 when
+the line is not there. Set it to the number you want and commit it in
+STATE_HOME; the next tick uses it. The board's header shows
+`active <n>/<cap>`, and `python3 <PLUGIN_HOME>/board/queue_rules.py slots`
+prints free, cap and active. The cap gates new dispatches only, so a comment
+round, or a `/drydock:dispatch` you confirm past it, can take `active` above
+it. The released 0.4.0 has a fixed cap of 2 and no `max_concurrent`; this is
+on `main` until the next release.
+[QUICKSTART](QUICKSTART.md#how-many-run-at-once) has the details, including
+how to tell which you have.
+
+Each execution is a full session doing real work, and each one that ships puts
+a deliverable in your review pass, so the right number depends on what you are
+willing to spend and how much you can review in a day. It lives in your
+config, beside `permission_mode`, where `/plugin update` cannot reset it.
+
+It counts directories in `specs/active/`, not sessions, because the directory
+is the state: an item waiting for its plan gate, under review or between fix
+rounds is still in flight whichever session is running for it, if any, and
+still counts. One function computes it, `queue_rules.py slots`, and the loop,
+`/drydock:dispatch` and the board all read it from there, so they cannot
+disagree about whether a slot is free.
+
+An invalid value — zero, a word, an empty value, the key twice — does not
+fall back to the default. `slots` fails, and the loop dispatches nothing until
+the line is fixed. A typo that quietly became 5 would run more at once than
+you chose, and failing closed is how the rest of drydock treats a config it
+cannot read.
 
 ## How does the permission posture work?
 
@@ -106,6 +139,42 @@ One thing follows that is easy to miss: **a spec is an instruction to an agent
 holding your credentials.** Reviewing a spec before dispatch is a real control,
 and it is why `/drydock:spec` writes specs instead of executing them. See
 [SECURITY.md](../SECURITY.md).
+
+## Can another session answer blocked questions for me?
+
+Yes, for the specs that name it, on `main` (the released 0.4.0 does not read
+`owner:`). Put `owner: <session-name>` in a spec's frontmatter, with the bare
+name `ListAgents` shows for that session, and that spec's blocked, delivered,
+dispatch-failure and budget events go to that session by `SendMessage`. It may
+then run `/drydock:spec unblock <id>` and decide.
+[QUICKSTART](QUICKSTART.md#handing-a-spec-to-another-session) has the setup.
+
+It pays off when the session that wrote a spec still holds what answers its
+questions: relaying each one through you costs a round trip and loses detail.
+The `## Resolution` names who decided in `resolved_by:`, so the retro, and
+you, can tell an owner's call from yours.
+
+Three things to know before you use it:
+
+- **It shares the unblock, nothing else.** `/drydock:review` is written for
+  you: approving is what marks the pull request ready for your team. That is a
+  convention, as the unblock's is; no skill checks who runs the review. The
+  `DELIVERED` event goes to the owner too, so while the owner is reachable
+  nothing tells you a deliverable is ready: you find it on the board and in
+  your review pass.
+- **Anything short of a confirmed delivery comes to you, with gaps.** A
+  question nobody receives is an item stuck in `blocked/`, so an owner that is
+  not listed, a failed send, or a message held, refused or expired sends the
+  event to you instead. The gaps are a Remote Control, cloud or Claude Desktop
+  session, which reports no hold or refusal; a delivery notice that arrives
+  after the tick that sent the message, which no step handles; and a message
+  that is delivered and then ignored, which nothing follows up. Keep the owner
+  on this machine, in the orchestrator's permission mode, and watch the board.
+- **The name is an address, not an identity.** drydock routes by the name
+  `ListAgents` shows, and the unblock takes a session's word that it is the
+  owner, as it takes yours at the keyboard. Name as owner only a session you
+  would let answer the question in your place — see
+  [SECURITY.md](../SECURITY.md).
 
 ## Can I run this against a repo my team owns?
 
