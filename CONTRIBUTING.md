@@ -114,11 +114,20 @@ before we do.
 
 ## Release process
 
-Releases are a tag; `.github/workflows/release.yml` does the rest.
+A release is one pull request, then a tag:
+
+1. Set `"version"` in `plugin/.claude-plugin/plugin.json` to the new
+   version.
+2. In `CHANGELOG.md`, move what is under `## [Unreleased]` into a new
+   `## [<version>] — <date>` section, leave under `Unreleased` only what is
+   still queued, and update the link references at the bottom.
+3. Merge that pull request.
+4. Tag the commit it landed as on `main`, and push the tag:
 
 ```sh
-git tag v0.2.0 && git push origin v0.2.0
+git tag v<version> <commit> && git push origin v<version>
 ```
 
-GitHub generates the notes from merged pull requests, so the pull request
-titles are the changelog — write them accordingly.
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which creates the
+GitHub release with generated notes. Those notes list the merged pull
+requests by title, not `CHANGELOG.md`, so write the titles accordingly.

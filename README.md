@@ -205,9 +205,9 @@ tick of a loop that is already running.
 
 The file is yours. It lives in STATE_HOME, not in the plugin, so `/plugin update` never resets it,
 and it is committed there like everything else. A new `max_concurrent` applies from the next tick;
-an invalid one stops dispatch until it is fixed. `max_concurrent` and owner sessions (below) are on
-`main` and not in the released 0.4.0, whose cap is a fixed 2 and which ignores both lines. How to
-tell which you have, how to read and change the cap, and what an upgrade does to it:
+an invalid one stops dispatch until it is fixed. `max_concurrent` and owner sessions (below) arrived
+in 0.5.0; 0.4.0 and earlier have a fixed cap of 2 and ignore both lines. How to tell which you
+have, how to read and change the cap, and what an upgrade does to it:
 [docs/QUICKSTART.md](docs/QUICKSTART.md#how-many-run-at-once).
 
 ### Owner sessions

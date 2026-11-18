@@ -89,8 +89,8 @@ STATE_HOME; the next tick uses it. The board's header shows
 `active <n>/<cap>`, and `python3 <PLUGIN_HOME>/board/queue_rules.py slots`
 prints free, cap and active. The cap gates new dispatches only, so a comment
 round, or a `/drydock:dispatch` you confirm past it, can take `active` above
-it. The released 0.4.0 has a fixed cap of 2 and no `max_concurrent`; this is
-on `main` until the next release.
+it. `max_concurrent` arrived in 0.5.0; 0.4.0 and earlier have a fixed cap of
+2 and no `max_concurrent`.
 [QUICKSTART](QUICKSTART.md#how-many-run-at-once) has the details, including
 how to tell which you have.
 
@@ -142,7 +142,7 @@ and it is why `/drydock:spec` writes specs instead of executing them. See
 
 ## Can another session answer blocked questions for me?
 
-Yes, for the specs that name it, on `main` (the released 0.4.0 does not read
+Yes, for the specs that name it, from 0.5.0 (0.4.0 and earlier do not read
 `owner:`). Put `owner: <session-name>` in a spec's frontmatter, with the bare
 name `ListAgents` shows for that session, and that spec's blocked, delivered,
 dispatch-failure and budget events go to that session by `SendMessage`. It may

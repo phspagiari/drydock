@@ -185,11 +185,10 @@ delivered pull request finishing ("comments addressed"). A spec that names an
 
 This section, [Handing a spec to another session](#handing-a-spec-to-another-session)
 and everything elsewhere in drydock's docs about `max_concurrent`, `slots`, a
-spec's `owner` or `resolved_by:` describe `main`, except where they name
-0.4.0. The released 0.4.0 has neither feature: its cap is a fixed 2
-that no config line changes, and it never reads `owner:`. Both stay on
-`main` until the next release. To tell which you have, ask the installed
-plugin for `slots`. A plugin from `main` prints three numbers; one from 0.4.0
+spec's `owner` or `resolved_by:` describe 0.5.0 and later. 0.4.0 and earlier
+have neither feature: their cap is a fixed 2 that no config line changes, and
+they never read `owner:`. To tell which you have, ask the installed plugin for
+`slots`. A plugin from 0.5.0 or later prints three numbers; one from 0.4.0
 prints:
 
 ```console
@@ -198,8 +197,9 @@ usage: queue_rules [-h] {eligible,check} ...
 queue_rules: error: argument command: invalid choice: 'slots' (choose from 'eligible', 'check')
 ```
 
-Such a plugin ignores a `max_concurrent:` line and an `owner:` line without
-saying so.
+Such a plugin, like one from 0.3.0 or earlier (which has no `queue_rules.py`
+at all), ignores a `max_concurrent:` line and an `owner:` line without saying
+so.
 
 The orchestrator dispatches a spec from the inbox only while fewer than
 `max_concurrent` items are in `specs/active/`. It is a line in
@@ -256,9 +256,9 @@ tick and notifies you (this one never goes to a spec's owner); it still
 verifies what is already running. `/drydock:dispatch` reports the error and
 stops. The board's header shows `active ?/?`, with the reason as its tooltip.
 
-**Upgrading.** In 0.4.0 the limit was 2 and no config line changed it. On
-`main`, a config without a `max_concurrent:` line means 5, so an install that
-takes this change without adding the line goes from 2 to 5. To keep 2, add
+**Upgrading.** In 0.4.0 the limit was 2 and no config line changed it. From
+0.5.0, a config without a `max_concurrent:` line means 5, so an install that
+upgrades without adding the line goes from 2 to 5. To keep 2, add
 `max_concurrent: 2`. `/drydock:install` writes the line only into a config it
 creates, so re-running it does not add the line to yours.
 
@@ -298,7 +298,7 @@ defect worth routing back into the executing skill. Say so when you answer.
 By default every event and every blocked question comes to you. A spec can
 instead name a Claude Code session that answers for it — the session that
 wrote it, say, and is still working on the surrounding problem. Like the
-concurrency cap, this is on `main` and not in the released 0.4.0 (see
+concurrency cap, this arrived in 0.5.0 and 0.4.0 does not have it (see
 [How many run at once](#how-many-run-at-once) to tell which you have). Add one
 line to the spec's frontmatter, the `yaml` block at the top; the template
 carries it commented out:

@@ -54,8 +54,8 @@ shell script someone handed you — reviewing a spec before it is dispatched is
 the control, and it is why `/drydock:spec` writes specs rather than executing
 them.
 
-**A spec's `owner:` line hands part of your role to another session.** On
-`main` (the released 0.4.0 does not read the line), a spec that names
+**A spec's `owner:` line hands part of your role to another session.** From
+0.5.0 (0.4.0 and earlier do not read the line), a spec that names
 `owner: <session-name>` sends its blocked, delivered, dispatch-failure and
 budget events to whichever session `ListAgents` lists under that name, by
 `SendMessage`, and lets that session decide the item's unblocks. Three things
