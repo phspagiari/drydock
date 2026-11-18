@@ -18,7 +18,8 @@ rather than cosmetic:
 - **PLUGIN_HOME** is wherever Claude Code installed the drydock plugin —
   `plugin/skills/`, `plugin/contracts/`, `plugin/board/`,
   `plugin/templates/`. Read-only from a running loop's perspective; it
-  changes only via `/plugin update`.
+  changes only when the plugin is updated
+  ([Quickstart § Staying current](QUICKSTART.md#staying-current)).
 - **STATE_HOME** is `~/.drydock` by default (override with
   `$DRYDOCK_STATE_HOME`) — `specs/`, `deliverables/`, `archive/`,
   `PRIORS.md`, `priors/`, `PROPOSALS.md`, `config`,

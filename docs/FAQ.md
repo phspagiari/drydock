@@ -97,7 +97,7 @@ how to tell which you have.
 Each execution is a full session doing real work, and each one that ships puts
 a deliverable in your review pass, so the right number depends on what you are
 willing to spend and how much you can review in a day. It lives in your
-config, beside `permission_mode`, where `/plugin update` cannot reset it.
+config, beside `permission_mode`, where a plugin update cannot reset it.
 
 It counts directories in `specs/active/`, not sessions, because the directory
 is the state: an item waiting for its plan gate, under review or between fix

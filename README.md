@@ -121,7 +121,9 @@ reads their state through it).
 ```
 
 The first two lines install the plugin itself — code, contracts, board — the same way you'd
-install any other Claude Code plugin; `/plugin update drydock` keeps it current later. `/drydock:install`
+install any other Claude Code plugin. Updates arrive with each drydock release, through
+`/plugin marketplace update drydock` in a session or `claude plugin update drydock@drydock` from a
+shell ([staying current](docs/QUICKSTART.md#staying-current)). `/drydock:install`
 then sets up your **STATE_HOME** (`~/.drydock` by default): a private, local-only git repository —
 never given a remote, ever — that holds your queue, deliverables, archive, and priors. It asks
 before it writes anything: where STATE_HOME should live, your **branch namespace** (usually your
@@ -203,7 +205,7 @@ tick of a loop that is already running.
 | `permission_mode` | The `--permission-mode` of every session the loop launches: `bypassPermissions` or `acceptEdits` | `bypassPermissions` unless you answer install's question otherwise; see [SECURITY.md](SECURITY.md) |
 | `max_concurrent` | How many items may be in `specs/active/` before the loop stops dispatching from the inbox | 5 when the line or the file is absent |
 
-The file is yours. It lives in STATE_HOME, not in the plugin, so `/plugin update` never resets it,
+The file is yours. It lives in STATE_HOME, not in the plugin, so a plugin update never resets it,
 and it is committed there like everything else. A new `max_concurrent` applies from the next tick;
 an invalid one stops dispatch until it is fixed. `max_concurrent` and owner sessions (below) arrived
 in 0.5.0; 0.4.0 and earlier have a fixed cap of 2 and ignore both lines. How to tell which you

@@ -23,7 +23,8 @@ nothing ships, because `ship` *is* `gh pr create --draft`.
 ```
 
 That installs the plugin itself — skills, contracts, board — the same way you'd install any other
-Claude Code plugin. It is read-only from here on; `/plugin update drydock` is how it changes. Then:
+Claude Code plugin. It is read-only from here on; an update is how it changes (see
+[Staying current](#staying-current)). Then:
 
 ```text
 /drydock:install
@@ -41,7 +42,7 @@ write. Seven steps:
 2. **Personalize**: your **branch namespace**, usually your git forge handle — every branch
    drydock creates in a target repo is `<namespace>/drydock-<id>` — and your permission posture
    (step 6). Both get written to `STATE_HOME/config`, never sed-replaced into the plugin's own
-   files, so a later `/plugin update` can never quietly reset them. A config this step creates
+   files, so a later plugin update can never quietly reset them. A config this step creates
    also gets `max_concurrent: 5` (see [How many run at once](#how-many-run-at-once)).
 3. **Seed the queue**: empty `specs/{inbox,active,blocked}`, `deliverables/`, `archive/`, plus
    `PRIORS.md` and `PROPOSALS.md` copied once from the plugin's seed templates.
@@ -71,6 +72,30 @@ instead — set `permission_mode: acceptEdits` in `STATE_HOME/config`, no
 contract file to edit. Some runs will stall on prompts. Take that trade: a
 stalled run is recoverable; an unreviewed mutation against live
 infrastructure is not.
+
+### Staying current
+
+drydock's `plugin.json` carries a version, and Claude Code fetches a new copy
+of a plugin only when its version changes, so an install moves from one
+drydock release to the next, not with every commit to `main`. In a session,
+this refreshes the marketplace and updates the plugins installed from it:
+
+```text
+/plugin marketplace update drydock
+```
+
+From a shell:
+
+```sh
+claude plugin update drydock@drydock
+```
+
+Auto-update is off by default for a third-party marketplace like this one;
+you can turn it on for it under `/plugin` > Marketplaces. A session that is
+already running keeps the version it loaded until you run `/reload-plugins`
+in it or restart it. STATE_HOME is not part of the plugin, so no update
+touches your queue, config or priors. The details are in Claude Code's
+[plugin documentation](https://code.claude.com/docs/en/plugins).
 
 ## The three-session topology
 

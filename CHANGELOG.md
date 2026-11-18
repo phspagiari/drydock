@@ -69,6 +69,11 @@ limit, add `max_concurrent: 2` to that config. Details under Changed.
   of a number in prose, the board header shows `active <n>/<cap>` from the
   same function, and `/drydock:install` writes `max_concurrent: 5` into a new
   config only. A test pins both gates to the CLI.
+- `README.md` and `docs/QUICKSTART.md` name Claude Code's documented update
+  commands, `/plugin marketplace update drydock` in a session and
+  `claude plugin update drydock@drydock` from a shell, in place of
+  `/plugin update drydock`, and QUICKSTART gains a *Staying current*
+  section.
 
 ## [0.4.0] — 2026-09-28
 
