@@ -10,14 +10,27 @@ plugin's `plugin/.claude-plugin/plugin.json` and the git tags that
 Queued in the drydock STATE_HOME and not yet landed — listed so the gap
 between "designed" and "shipped" is on the record:
 
-- Criterion construction (`speccheck.py`, ship criteria vs acceptance
-  criteria, R1/R2 rules callable against `PLAN.md`'s `Verify` column).
 - Escalation and evidence discipline (QUESTION.md shape rule, evidence
   provenance after a fix round).
-- Chained items' prepared PR text applied at ship (PROPOSALS P15).
 
 ### Added
 
+- **Chained items' prepared PR text applied at ship** (#11). A pull-request
+  item's `READY.md` carries its title and body in one `## Prepared PR text`
+  section, which the new `plugin/board/pr_text.py` extracts, digests and
+  verifies. When an item declares `pr_url:`, ship checks the live title and
+  body against the `pr_text_base:` digest the text started from, pushes,
+  applies the reviewed text with `gh pr edit` as a full replacement and
+  verifies the read-back; any failure blocks the item.
+- **A lint for spec criteria** (#13). `plugin/board/speccheck.py` finds
+  criteria that can read green while proving nothing — a Command cell that is
+  prose, a pass condition that needs a pull request, a whole-file read of a
+  drydock artifact, an absence check with no positive control — and prints
+  each as a rule id. DISPATCH preflight step 3a runs it and blocks the spec on
+  any non-zero exit. The spec template gains a `## Ship criteria` table for
+  checks that need a pull request, a merge, a deploy or a human; the executor
+  carries it forward unevaluated. Run on a plan, it applies R1 to the
+  `Tasks` table's `Verify` column; no dispatch step runs it on `PLAN.md`.
 - **Owner-routed escalations.** A spec may name `owner: <session-name>` in
   its frontmatter (commented out in the template). The new
   `queue_rules.py route` turns that into `owner<TAB><name>` or `human`, and
@@ -33,17 +46,17 @@ between "designed" and "shipped" is on the record:
 ### Changed
 
 - **The concurrency cap is a config value, and its default is now 5.**
-  `max_concurrent: <n>` in `<STATE_HOME>/config` sets how many executions
-  may be active at once. When the key or the file is absent the cap is 5,
-  so an install whose config has no `max_concurrent:` line goes from at
-  most 2 concurrent executions to at most 5 on upgrade. To keep the old
-  limit, add `max_concurrent: 2` to that config. `queue_rules.py slots`
-  computes it, printing `<free>`, `<cap>` and `<active>`, and exits 2 on an
-  invalid, empty or repeated value. The orchestrator's Inbox step and
-  `/drydock:dispatch` step 1 gate on it instead of a number in prose, the
-  board header shows `active <n>/<cap>` from the same function, and
-  `/drydock:install` writes `max_concurrent: 5` into a new config only. A
-  test pins both gates to the CLI.
+  `max_concurrent: <n>` in `<STATE_HOME>/config` sets how many items may be
+  in `specs/active/` before the loop stops dispatching from the inbox. When
+  the key or the file is absent the cap is 5, so an install whose config has
+  no `max_concurrent:` line goes from a cap of 2 to a cap of 5 on upgrade.
+  To keep the old limit, add `max_concurrent: 2` to that config.
+  `queue_rules.py slots` computes it, printing `<free>`, `<cap>` and
+  `<active>`, and exits 2 on an invalid, empty or repeated value. The
+  orchestrator's Inbox step and `/drydock:dispatch` step 1 gate on it instead
+  of a number in prose, the board header shows `active <n>/<cap>` from the
+  same function, and `/drydock:install` writes `max_concurrent: 5` into a new
+  config only. A test pins both gates to the CLI.
 
 ## [0.4.0] — 2026-09-28
 

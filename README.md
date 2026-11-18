@@ -22,7 +22,7 @@ built and inspected in the dock, and launched only when ready.</strong>
 <p>
 <a href="#quickstart">Quickstart</a> ·
 <a href="#how-it-works">How it works</a> ·
-<a href="contracts/">Contracts</a> ·
+<a href="plugin/contracts/">Contracts</a> ·
 <a href="#the-board">Board</a> ·
 <a href="docs/ARCHITECTURE.md">Architecture</a>
 </p>
@@ -105,8 +105,8 @@ an executor that hits an unresolved question, a failing criterion, or a step out
 blast radius stops, writes the concrete decision you need into `QUESTION.md`, and files itself into
 `specs/blocked/`. Everything you must decide reaches you before any PR exists — never as a footnote
 in a description you would have skimmed. A spec may name an `owner:` session instead: its events go
-to that session by `SendMessage`, it may decide the item's unblocks, and anything it cannot be
-reached for still comes to you.
+to that session by `SendMessage`, it may decide the item's unblocks, and whatever is not confirmed
+delivered comes to you instead ([owner sessions](#owner-sessions)).
 
 ## Quickstart
 
@@ -193,6 +193,39 @@ tick of a loop that is already running.
 | `/drydock:retro` | Mines runs into priors and queued rule proposals | Automatic after each ship; the full sweep is interactive |
 | `/drydock:install` | Bootstraps a fresh environment | Once |
 
+### Configuration
+
+`/drydock:install` writes `<STATE_HOME>/config`, one `key: value` per line:
+
+| Key | Sets | Default |
+|---|---|---|
+| `namespace` | The prefix of every branch drydock creates, `<namespace>/drydock-<id>` | None: without it the orchestrator stops and says install has not been personalized |
+| `permission_mode` | The `--permission-mode` of every session the loop launches: `bypassPermissions` or `acceptEdits` | `bypassPermissions` unless you answer install's question otherwise; see [SECURITY.md](SECURITY.md) |
+| `max_concurrent` | How many items may be in `specs/active/` before the loop stops dispatching from the inbox | 5 when the line or the file is absent |
+
+The file is yours. It lives in STATE_HOME, not in the plugin, so `/plugin update` never resets it,
+and it is committed there like everything else. A new `max_concurrent` applies from the next tick;
+an invalid one stops dispatch until it is fixed. `max_concurrent` and owner sessions (below) are on
+`main` and not in the released 0.4.0, whose cap is a fixed 2 and which ignores both lines. How to
+tell which you have, how to read and change the cap, and what an upgrade does to it:
+[docs/QUICKSTART.md](docs/QUICKSTART.md#how-many-run-at-once).
+
+### Owner sessions
+
+A spec may name the Claude Code session that answers for it, with `owner: <session-name>` in its
+frontmatter — the bare name `ListAgents` shows for that session. That spec's four events (blocked,
+delivered, dispatch failure, budget exceeded) then go to that session by `SendMessage` instead of
+to you, including the one that says a deliverable is ready, and the session may run
+`/drydock:spec unblock <id>` and decide; the `## Resolution` it writes records
+`resolved_by: <session-name>`. When delivery is not confirmed, the event comes to you. Three
+things do not: a Remote Control, cloud or Claude Desktop session reports nothing when it holds or
+refuses a message, a delivery notice that arrives after the tick that sent the message has no step
+to handle it, and a message that was delivered but never acted on is not followed up. The owner
+must run in the orchestrator's permission mode. Approving a deliverable is not handed to it —
+`/drydock:review` is written for you — and a spec without `owner:` works as the rest of this
+README describes. Setting one up, what the owner receives, and every case that falls back to you:
+[docs/QUICKSTART.md](docs/QUICKSTART.md#handing-a-spec-to-another-session).
+
 ### The rules that hold it together
 
 These are distilled from the contracts; each is load-bearing, and each exists because the failure
@@ -219,8 +252,8 @@ it prevents is expensive.
   ships.
 - **Deterministic FIFO.** The inbox is ordered lexicographically by id, never by mtime, because
   moves and edits reset mtime.
-- **Bounded concurrency.** At most `max_concurrent` executions at a time (set in
-  `<STATE_HOME>/config`, default 5), one relaunch per spec, and a heartbeat file that stops a
+- **Bounded concurrency.** No dispatch from the inbox while `max_concurrent` items are active (set
+  in `<STATE_HOME>/config`, default 5), one relaunch per spec, and a heartbeat file that stops a
   second orchestrator from starting.
 
 Full lifecycle, the actor model, and the state diagram: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -234,7 +267,9 @@ python3 plugin/board/server.py serve --port 8642   # --root defaults to ~/.drydo
 Standard library only, no install step, no build. It reads the queue from disk on every request —
 no cache, no background daemon, no regeneration step, so **what you see is what is on disk right
 now**. It binds `127.0.0.1` only and serves a fixed allowlist of item files. Blocked and delivered
-cards carry the paste-ready `claude "…"` command that works them.
+cards carry the paste-ready `claude "…"` command that works them. The header reads
+`active <n>/<cap>`, the items in `specs/active/` against `max_concurrent`, or `active ?/?` when the
+config's value is invalid.
 
 <!-- BOARD SCREENSHOT: docs/media/board.png — capture with a populated fixture queue, dark theme. -->
 

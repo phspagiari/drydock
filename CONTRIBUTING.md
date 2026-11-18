@@ -18,17 +18,43 @@ issue first — see House conventions.
 Lint before you push:
 
 ```sh
-uvx ruff check plugin/board/
+uvx ruff@0.16.5 check plugin/board/
 npx markdownlint-cli2
 ```
 
-Both run in CI (`.github/workflows/ci.yml`) exactly as written above.
+Both run in CI (`.github/workflows/ci.yml`): ruff at the version pinned above,
+markdownlint through its GitHub action.
 
 ## Testing a contract change
 
-The contracts in `plugin/contracts/` are prose that agents execute, so they
-have no test suite — which makes review the only gate. A contract change
-should say, in the pull request:
+The contracts in `plugin/contracts/` are prose that agents execute. Most of
+that prose has no test, and review is its only gate. Some sentences are
+pinned: tests in `plugin/board/tests/` find a region of a contract or skill by
+its content and assert what it must say.
+
+| Test | What it pins |
+|---|---|
+| `test_contract_refs.py` | DISPATCH.md's steps are exactly 1–17, with the `8a`–`8c` and `12a`–`12d` labels, and every `step N` citation in `plugin/contracts/` and `plugin/skills/` resolves |
+| `test_contract_rules.py` | REVIEWER.md's diff-review verdicts against the board's `static/app.js`; the round-cap rules in REVIEWER.md, DISPATCH step 12 and ORCHESTRATOR.md, and their restatements in `README.md` and `docs/ARCHITECTURE.md`; the repair pass never rewriting a commit |
+| `test_contract_liveness.py` | The liveness and branch-drift clauses of DISPATCH steps 5 and 7 and ORCHESTRATOR.md's Active step |
+| `test_session_contracts.py` | DISPATCH.md's *Every session* section, the pointers to it from step 8's prompts and REVIEWER.md, and ORCHESTRATOR.md's Hard limits: the loop as a session, and the finished-work clause |
+| `test_contract_slots.py` | The concurrency gates (ORCHESTRATOR.md's Inbox step, the dispatch skill's step 1) run `queue_rules.py slots` and state no count; the Hard limits default equals `DEFAULT_MAX_CONCURRENT`; DISPATCH step 7's chained-spec clause names the key and no count |
+| `test_contract_owner.py` | The Notifications routing in ORCHESTRATOR.md's Hard limits and every event site's token, DISPATCH step 13, the `owner:` line at every `queue_rules.py check` site (DISPATCH step 1, ORCHESTRATOR.md's preflight bullet, the dispatch skill's step 2), the owner's permission mode, the spec skill's Unblock mode and `resolved_by:`, the retro's citation of it |
+
+`test_owner_route.py`, `test_queue_rules.py` and `test_server.py` also read
+`plugin/templates/spec-template.md`.
+
+What none of them checks is whether an agent following the prose does the
+right thing, or whether a sentence outside those regions is still true. A
+green suite says the pinned sentences are there; it does not review the rest.
+
+If you change a pinned sentence, run the suite. A failure means a test still
+expects the old text: when the rule itself changed, change the test in the
+same pull request so the new sentence is pinned as the old one was, and name
+the assertion you changed in the description. When only the wording changed,
+keep the words the test anchors on.
+
+A contract change should say, in the pull request:
 
 - **The run that motivated it.** Which item, which artifact — a `REVIEW.md`
   round, a `QUESTION.md` resolution, a `REJECTION.md` routing. A contract
@@ -38,7 +64,11 @@ should say, in the pull request:
 - **Whether any step numbers moved.** `plugin/contracts/DISPATCH.md` numbers
   its steps 1–17 continuously, and `ORCHESTRATOR.md` and `REVIEWER.md` cite
   them by number ("per DISPATCH step 12"). Renumbering means updating the
-  callers.
+  callers; `test_contract_refs.py` fails on a citation that no longer
+  resolves in the contracts and skills, but not in `README.md` or `docs/`.
+
+A change a user would notice also gets a line under `## [Unreleased]` in
+`CHANGELOG.md`.
 
 `PROPOSALS.md`, in a user's own `STATE_HOME` (`~/.drydock` by default, never
 in this repo), is where `/drydock:retro` queues amendments it wants a human
