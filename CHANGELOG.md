@@ -13,6 +13,18 @@ between "designed" and "shipped" is on the record:
 - Escalation and evidence discipline (QUESTION.md shape rule, evidence
   provenance after a fix round).
 
+## [0.5.0] — 2026-11-18
+
+The release that makes the concurrency cap a setting and lets a spec hand
+its escalations to a named session. It also lints a spec's criteria at
+preflight, blocking a spec whose criteria can read green while proving
+nothing, and applies a chained item's reviewed pull-request text at ship.
+487 tests on `main` (was 308 at `v0.4.0`); CI green at `ae30cd4`.
+
+**Upgrading from 0.4.0:** an install whose `<STATE_HOME>/config` has no
+`max_concurrent:` line goes from a cap of 2 to a cap of 5. To keep the old
+limit, add `max_concurrent: 2` to that config. Details under Changed.
+
 ### Added
 
 - **Chained items' prepared PR text applied at ship** (#11). A pull-request
@@ -31,7 +43,7 @@ between "designed" and "shipped" is on the record:
   checks that need a pull request, a merge, a deploy or a human; the executor
   carries it forward unevaluated. Run on a plan, it applies R1 to the
   `Tasks` table's `Verify` column; no dispatch step runs it on `PLAN.md`.
-- **Owner-routed escalations.** A spec may name `owner: <session-name>` in
+- **Owner-routed escalations** (#16). A spec may name `owner: <session-name>` in
   its frontmatter (commented out in the template). The new
   `queue_rules.py route` turns that into `owner<TAB><name>` or `human`, and
   exits 2 on an invalid owner, which `check` also reports as an `owner:`
@@ -45,7 +57,7 @@ between "designed" and "shipped" is on the record:
 
 ### Changed
 
-- **The concurrency cap is a config value, and its default is now 5.**
+- **The concurrency cap is a config value, and its default is now 5** (#15).
   `max_concurrent: <n>` in `<STATE_HOME>/config` sets how many items may be
   in `specs/active/` before the loop stops dispatching from the inbox. When
   the key or the file is absent the cap is 5, so an install whose config has
@@ -235,7 +247,8 @@ view, and the executor from one session into three. Design note:
   board, install, retro), contracts, templates, the stdlib board and its
   tests, CI (ruff, unittest, markdownlint, actionlint).
 
-[Unreleased]: https://github.com/phspagiari/drydock/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/phspagiari/drydock/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/phspagiari/drydock/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/phspagiari/drydock/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/phspagiari/drydock/releases/tag/v0.3.0
 [0.1.0]: https://github.com/phspagiari/drydock/commits/8837509
