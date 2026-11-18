@@ -18,7 +18,8 @@ rather than cosmetic:
 - **PLUGIN_HOME** is wherever Claude Code installed the drydock plugin —
   `plugin/skills/`, `plugin/contracts/`, `plugin/board/`,
   `plugin/templates/`. Read-only from a running loop's perspective; it
-  changes only via `/plugin update`.
+  changes only when the plugin is updated
+  ([Quickstart § Staying current](QUICKSTART.md#staying-current)).
 - **STATE_HOME** is `~/.drydock` by default (override with
   `$DRYDOCK_STATE_HOME`) — `specs/`, `deliverables/`, `archive/`,
   `PRIORS.md`, `priors/`, `PROPOSALS.md`, `config`,
@@ -113,7 +114,7 @@ The three edges you drive yourself are `/drydock:spec` into the inbox,
 `/drydock:spec unblock <id>` out of `blocked`, and `/drydock:review` out of
 `deliverables`. Every other transition is the orchestrator's.
 
-On `main`, though not in the released 0.4.0, a spec whose frontmatter names
+From 0.5.0, a spec whose frontmatter names
 an `owner: <session-name>` shares one of those with that session, the
 unblock; `/drydock:review` is written for you. Its blocked, delivered,
 dispatch-failure and budget events reach the owner by `SendMessage` rather
@@ -125,6 +126,7 @@ in those cases the event may reach no one and the item waits on the board.
 The owner may run the unblock and decide it; an owner that cannot decide
 leaves the item in `blocked`. Every `## Resolution` records who decided in a
 `resolved_by:` line. A spec without `owner:` works exactly as described here.
+0.4.0 and earlier never read the line.
 
 The cycle worth internalising is `active → in review → active`: a loop that
 runs entirely inside one worktree, with no pull request, no inbox round-trip,
