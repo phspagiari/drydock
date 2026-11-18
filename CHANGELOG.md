@@ -69,6 +69,15 @@ limit, add `max_concurrent: 2` to that config. Details under Changed.
   of a number in prose, the board header shows `active <n>/<cap>` from the
   same function, and `/drydock:install` writes `max_concurrent: 5` into a new
   config only. A test pins both gates to the CLI.
+- Usage docs for the concurrency cap and owner sessions (#17). `README.md`
+  gains a Configuration table and an Owner sessions summary,
+  `docs/QUICKSTART.md` the sections *How many run at once* and *Handing a
+  spec to another session*, `docs/FAQ.md` an answer for each, and
+  `docs/ARCHITECTURE.md` the owner's delivery gaps and what the cap gates.
+  `SECURITY.md`'s threat model gains a paragraph on `owner:`.
+  `CONTRIBUTING.md` gains a table of which tests pin which contract
+  sentences, and a new `CLAUDE.md` condenses the house rules for agents
+  working on drydock itself.
 - `README.md` and `docs/QUICKSTART.md` name Claude Code's documented update
   commands, `/plugin marketplace update drydock` in a session and
   `claude plugin update drydock@drydock` from a shell, in place of

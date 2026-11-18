@@ -131,3 +131,6 @@ git tag v<version> <commit> && git push origin v<version>
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which creates the
 GitHub release with generated notes. Those notes list the merged pull
 requests by title, not `CHANGELOG.md`, so write the titles accordingly.
+Do not create the GitHub release by hand before pushing the tag: the
+workflow's `gh release create` fails when a release for that tag already
+exists. If the notes need more, edit the generated release afterwards.

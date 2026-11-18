@@ -92,9 +92,11 @@ claude plugin update drydock@drydock
 
 Auto-update is off by default for a third-party marketplace like this one;
 you can turn it on for it under `/plugin` > Marketplaces. A session that is
-already running keeps the version it loaded until you run `/reload-plugins`
-in it or restart it. STATE_HOME is not part of the plugin, so no update
-touches your queue, config or priors. The details are in Claude Code's
+already running keeps the version it loaded; restart it to pick up the update
+(Claude Code also has `/reload-plugins`). After updating, stop the
+orchestrator loop and start it again, so that the loop and the sessions it
+launches run the same version. STATE_HOME is not part of the plugin, so no
+update touches your queue, config or priors. The details are in Claude Code's
 [plugin documentation](https://code.claude.com/docs/en/plugins).
 
 ## The three-session topology
